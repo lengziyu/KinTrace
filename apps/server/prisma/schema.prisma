@@ -1,0 +1,226 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  super_admin
+  family_admin
+}
+
+enum FamilyMemberRole {
+  admin
+  manager
+  member
+}
+
+enum MemberStatus {
+  active
+  inactive
+}
+
+enum TaskStatus {
+  draft
+  active
+  closed
+}
+
+enum RecordActionType {
+  visited
+  cleaned
+  offered
+  note
+}
+
+enum MessageStatus {
+  pending
+  approved
+  rejected
+}
+
+enum LocationShareSessionStatus {
+  active
+  closed
+}
+
+model User {
+  id           String        @id @default(cuid())
+  username     String        @unique
+  passwordHash String
+  displayName  String
+  role         UserRole
+  status       MemberStatus  @default(active)
+  families     FamilyGroup[] @relation("FamilyOwner")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model FamilyGroup {
+  id                    String                  @id @default(cuid())
+  name                  String
+  code                  String                  @unique
+  description           String?
+  inviteCode            String                  @unique
+  ownerUserId           String?
+  upcomingWorshipAt     DateTime?
+  visitRangeMeters      Int                     @default(300)
+  ownerUser             User?                   @relation("FamilyOwner", fields: [ownerUserId], references: [id])
+  members               FamilyMember[]
+  tombs                 TombPoint[]
+  tasks                 WorshipTask[]
+  messages              MemorialMessage[]
+  routePlans            RoutePlan[]
+  locationShareSessions LocationShareSession[]
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+}
+
+model FamilyMember {
+  id                    String                    @id @default(cuid())
+  familyId              String
+  family                FamilyGroup               @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  nickname              String
+  avatar                String?
+  phone                 String?
+  role                  FamilyMemberRole          @default(member)
+  joinSource            String                    @default("invite")
+  status                MemberStatus              @default(active)
+  joinedAt              DateTime                  @default(now())
+  records               WorshipRecord[]
+  messages              MemorialMessage[]
+  photos                TombPhoto[]
+  routePlans            RoutePlan[]
+  startedShareSessions  LocationShareSession[]    @relation("LocationShareStartedBy")
+  shareParticipants     LocationShareParticipant[] @relation("LocationShareParticipantMember")
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+
+  @@unique([familyId, nickname])
+}
+
+model TombPoint {
+  id          String            @id @default(cuid())
+  familyId    String
+  family      FamilyGroup       @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name        String
+  titleName   String?
+  generation  String?
+  branchName  String?
+  lng         Float
+  lat         Float
+  areaName    String?
+  description String?
+  coverImage  String?
+  records     WorshipRecord[]
+  messages    MemorialMessage[]
+  photos      TombPhoto[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+model WorshipTask {
+  id        String         @id @default(cuid())
+  familyId  String
+  family    FamilyGroup    @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  year      Int
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  status    TaskStatus     @default(draft)
+  records   WorshipRecord[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@unique([familyId, year])
+}
+
+model WorshipRecord {
+  id              String           @id @default(cuid())
+  taskId          String
+  task            WorshipTask      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tombId          String
+  tomb            TombPoint        @relation(fields: [tombId], references: [id], onDelete: Cascade)
+  memberId        String
+  member          FamilyMember     @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  actionType      RecordActionType @default(visited)
+  remark          String?
+  checkInLng      Float?
+  checkInLat      Float?
+  checkInAccuracy Float?
+  distanceMeters  Int?
+  worshipTime     DateTime
+  createdAt       DateTime         @default(now())
+}
+
+model TombPhoto {
+  id        String       @id @default(cuid())
+  tombId    String
+  tomb      TombPoint    @relation(fields: [tombId], references: [id], onDelete: Cascade)
+  memberId  String
+  member    FamilyMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  imageUrl  String
+  caption   String?
+  createdAt DateTime     @default(now())
+}
+
+model MemorialMessage {
+  id        String        @id @default(cuid())
+  familyId  String
+  family    FamilyGroup   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  tombId    String
+  tomb      TombPoint     @relation(fields: [tombId], references: [id], onDelete: Cascade)
+  memberId  String
+  member    FamilyMember  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  content   String
+  status    MessageStatus @default(pending)
+  createdAt DateTime      @default(now())
+}
+
+model RoutePlan {
+  id                String        @id @default(cuid())
+  familyId          String
+  family            FamilyGroup   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name              String
+  description       String?
+  tombIds           Json
+  createdByMemberId String?
+  createdByMember   FamilyMember? @relation(fields: [createdByMemberId], references: [id], onDelete: SetNull)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+model LocationShareSession {
+  id                String                     @id @default(cuid())
+  familyId          String
+  family            FamilyGroup                @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  title             String?
+  status            LocationShareSessionStatus @default(active)
+  startedByMemberId String
+  startedByMember   FamilyMember               @relation("LocationShareStartedBy", fields: [startedByMemberId], references: [id], onDelete: Cascade)
+  participants      LocationShareParticipant[]
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  endedAt           DateTime?
+}
+
+model LocationShareParticipant {
+  id              String               @id @default(cuid())
+  sessionId       String
+  session         LocationShareSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  memberId        String
+  member          FamilyMember         @relation("LocationShareParticipantMember", fields: [memberId], references: [id], onDelete: Cascade)
+  nicknameSnapshot String
+  lng             Float
+  lat             Float
+  accuracy        Float?
+  isOnline        Boolean              @default(true)
+  lastActiveAt    DateTime             @default(now())
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@unique([sessionId, memberId])
+}
