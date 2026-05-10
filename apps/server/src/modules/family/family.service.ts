@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { buildFamilyKeyBase, generateThreeDigitSuffix } from './family-key.util';
 import { CreateFamilyDto } from './dto/create-family.dto';
 import { UpdateFamilyDto } from './dto/update-family.dto';
 
@@ -54,6 +55,63 @@ export class FamilyService {
           participant.lastActiveAt.getTime() >= staleThreshold,
       })),
     };
+  }
+
+  private async generateUniqueCode(name: string, excludeId?: string) {
+    const base = buildFamilyKeyBase(name);
+    let candidate = base;
+    let attempt = 0;
+
+    while (attempt < 30) {
+      const exists = await this.prisma.familyGroup.findFirst({
+        where: {
+          code: candidate,
+          id: excludeId
+            ? {
+                not: excludeId,
+              }
+            : undefined,
+        },
+        select: { id: true },
+      });
+
+      if (!exists) {
+        return candidate;
+      }
+
+      candidate = `${base}-${generateThreeDigitSuffix()}`;
+      attempt += 1;
+    }
+
+    return `${base}-${Date.now().toString().slice(-4)}`;
+  }
+
+  private async generateUniqueInviteCode(name: string, excludeId?: string) {
+    const base = buildFamilyKeyBase(name);
+    let attempt = 0;
+
+    while (attempt < 50) {
+      const candidate = `${base}_${generateThreeDigitSuffix()}`;
+      const exists = await this.prisma.familyGroup.findFirst({
+        where: {
+          inviteCode: candidate,
+          id: excludeId
+            ? {
+                not: excludeId,
+              }
+            : undefined,
+        },
+        select: { id: true },
+      });
+
+      if (!exists) {
+        return candidate;
+      }
+
+      attempt += 1;
+    }
+
+    return `${base}_${Date.now().toString().slice(-3)}`;
   }
 
   findAll() {
@@ -169,10 +227,42 @@ export class FamilyService {
     };
   }
 
-  create(dto: CreateFamilyDto) {
+  resolveByAccess(familyCode?: string, inviteCode?: string) {
+    const code = familyCode?.trim();
+    const invite = inviteCode?.trim();
+    const filters: Array<{ code?: string; inviteCode?: string }> = [];
+
+    if (code) {
+      filters.push({ code });
+    }
+
+    if (invite) {
+      filters.push({ inviteCode: invite });
+    }
+
+    if (filters.length === 0) {
+      return null;
+    }
+
+    return this.prisma.familyGroup.findFirst({
+      where: {
+        OR: filters,
+      },
+    });
+  }
+
+  async create(dto: CreateFamilyDto) {
+    const name = dto.name.trim();
+    const code = dto.code?.trim() || (await this.generateUniqueCode(name));
+    const inviteCode =
+      dto.inviteCode?.trim() || (await this.generateUniqueInviteCode(name));
+
     return this.prisma.familyGroup.create({
       data: {
         ...dto,
+        name,
+        code,
+        inviteCode,
         upcomingWorshipAt: dto.upcomingWorshipAt
           ? new Date(dto.upcomingWorshipAt)
           : undefined,
@@ -181,11 +271,29 @@ export class FamilyService {
     });
   }
 
-  update(id: string, dto: UpdateFamilyDto) {
+  async update(id: string, dto: UpdateFamilyDto) {
+    const currentFamily = await this.prisma.familyGroup.findUnique({
+      where: { id },
+      select: { name: true },
+    });
+    const nextName = dto.name?.trim() || currentFamily?.name || 'family';
+    const nextCode =
+      dto.code === undefined
+        ? undefined
+        : dto.code.trim() || (await this.generateUniqueCode(nextName, id));
+    const nextInviteCode =
+      dto.inviteCode === undefined
+        ? undefined
+        : dto.inviteCode.trim() ||
+          (await this.generateUniqueInviteCode(nextName, id));
+
     return this.prisma.familyGroup.update({
       where: { id },
       data: {
         ...dto,
+        name: dto.name?.trim(),
+        code: nextCode,
+        inviteCode: nextInviteCode,
         upcomingWorshipAt:
           dto.upcomingWorshipAt === undefined
             ? undefined

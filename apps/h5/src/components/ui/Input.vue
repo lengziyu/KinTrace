@@ -20,7 +20,7 @@ const emit = defineEmits<{
     :placeholder="placeholder"
     :class="
       cn(
-        'flex h-11 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card)/0.58)] px-4 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground/80 focus-visible:border-[hsl(var(--ring))] focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))/0.25]',
+        'flex h-11 w-full rounded-[var(--radius)] border border-[hsl(var(--border))] bg-[hsl(var(--card)/0.58)] px-4 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground/80 focus-visible:border-[hsl(var(--ring))] focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))/0.25]',
         $props.class,
       )
     "

@@ -86,6 +86,38 @@ export class WorshipRecordService {
       }
     }
 
+    const [task, member, tombFamily] = await Promise.all([
+      this.prisma.worshipTask.findUnique({
+        where: { id: dto.taskId },
+        select: {
+          familyId: true,
+        },
+      }),
+      this.prisma.familyMember.findUnique({
+        where: { id: dto.memberId },
+        select: {
+          familyId: true,
+        },
+      }),
+      this.prisma.tombPoint.findUnique({
+        where: { id: dto.tombId },
+        select: {
+          familyId: true,
+        },
+      }),
+    ]);
+
+    if (!task || !member || !tombFamily) {
+      throw new BadRequestException('祭扫记录关联的任务、成员或点位不存在');
+    }
+
+    if (
+      task.familyId !== member.familyId ||
+      task.familyId !== tombFamily.familyId
+    ) {
+      throw new BadRequestException('祭扫记录的家族归属不一致');
+    }
+
     return this.prisma.worshipRecord.create({
       data: {
         taskId: dto.taskId,

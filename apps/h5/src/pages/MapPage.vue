@@ -1,39 +1,44 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { RouterLink } from "vue-router";
-import { Navigation2, RefreshCw } from "lucide-vue-next";
+import { computed, ref } from "vue";
+import { LockKeyhole, Navigation2, Search, X } from "lucide-vue-next";
+import { useRouter } from "vue-router";
 import MapBoard from "@/components/MapBoard.vue";
 import TombCover from "@/components/TombCover.vue";
 import Badge from "@/components/ui/Badge.vue";
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
+import Input from "@/components/ui/Input.vue";
 import { useSessionStore } from "@/stores/session";
 
+const router = useRouter();
 const sessionStore = useSessionStore();
-const selectedTombId = ref(sessionStore.tombs[0]?.id ?? null);
-const shareBusy = ref(false);
-const shareError = ref("");
+const keyword = ref("");
 
-let refreshTimer: ReturnType<typeof window.setInterval> | null = null;
-let heartbeatTimer: ReturnType<typeof window.setInterval> | null = null;
+const filteredTombs = computed(() => {
+  const normalizedKeyword = keyword.value.trim().toLowerCase();
 
-const selectedTomb = computed(
-  () => sessionStore.tombs.find((item) => item.id === selectedTombId.value) ?? sessionStore.tombs[0],
-);
+  if (!normalizedKeyword) {
+    return sessionStore.tombs;
+  }
 
-const activeLocationShare = computed(() => sessionStore.activeLocationShare);
-const onlineParticipants = computed(
-  () => activeLocationShare.value?.participants.filter((participant) => participant.isOnline) ?? [],
-);
-const myParticipant = computed(() =>
-  activeLocationShare.value?.participants.find((participant) => participant.memberId === sessionStore.member.id) ?? null,
-);
-const isSharing = computed(() => Boolean(myParticipant.value?.isOnline));
-const canCloseSession = computed(
-  () => activeLocationShare.value?.startedByMemberId === sessionStore.member.id,
-);
+  return sessionStore.tombs.filter((tomb) =>
+    [tomb.name, tomb.areaName, tomb.branchName, tomb.description]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(normalizedKeyword)),
+  );
+});
+
+const activeRoutePreview = computed(() => (keyword.value.trim() ? null : sessionStore.routePreview));
+
+function clearKeyword() {
+  keyword.value = "";
+}
 
 function openNavigation(lng: number, lat: number, name: string) {
+  if (!sessionStore.isAuthenticated) {
+    return;
+  }
+
   const encodedName = encodeURIComponent(name);
   window.open(
     `https://uri.amap.com/navigation?to=${lng},${lat},${encodedName}&mode=car&coordinate=gaode&callnative=1`,
@@ -41,269 +46,97 @@ function openNavigation(lng: number, lat: number, name: string) {
   );
 }
 
-function requestPosition() {
-  return new Promise<{ lng: number; lat: number; accuracy: number | null }>((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error("当前浏览器不支持定位能力"));
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        resolve({
-          lng: position.coords.longitude,
-          lat: position.coords.latitude,
-          accuracy: position.coords.accuracy ?? null,
-        });
-      },
-      (error) => {
-        reject(new Error(error.message || "定位失败，请检查浏览器授权"));
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 5000,
-      },
-    );
-  });
+function openTombDetail(tombId: string) {
+  void router.push(`/tombs/${tombId}`);
 }
-
-async function refreshLocationShare() {
-  if (sessionStore.source !== "api") {
-    return;
-  }
-
-  await sessionStore.fetchActiveLocationShare();
-}
-
-async function syncHeartbeat() {
-  if (!activeLocationShare.value || !isSharing.value) {
-    return;
-  }
-
-  try {
-    const position = await requestPosition();
-    await sessionStore.heartbeatLocationShare(activeLocationShare.value.id, position);
-    shareError.value = "";
-  } catch (error) {
-    shareError.value = error instanceof Error ? error.message : "位置共享更新失败";
-  }
-}
-
-function startHeartbeatLoop() {
-  if (heartbeatTimer) {
-    window.clearInterval(heartbeatTimer);
-  }
-
-  if (!isSharing.value || !activeLocationShare.value) {
-    return;
-  }
-
-  heartbeatTimer = window.setInterval(() => {
-    void syncHeartbeat();
-  }, 15000);
-}
-
-function startRefreshLoop() {
-  if (refreshTimer) {
-    window.clearInterval(refreshTimer);
-  }
-
-  if (sessionStore.source !== "api") {
-    return;
-  }
-
-  refreshTimer = window.setInterval(() => {
-    void refreshLocationShare();
-  }, 10000);
-}
-
-async function startOrJoinLocationShare() {
-  shareBusy.value = true;
-  try {
-    const position = await requestPosition();
-
-    if (activeLocationShare.value) {
-      await sessionStore.joinLocationShare(activeLocationShare.value.id, position);
-    } else {
-      const title = sessionStore.activeTask?.name
-        ? `${sessionStore.activeTask.name} · 实时位置共享`
-        : "家族实时位置共享";
-      await sessionStore.startLocationShare(position, title);
-    }
-
-    shareError.value = "";
-    startHeartbeatLoop();
-  } catch (error) {
-    shareError.value = error instanceof Error ? error.message : "无法开启位置共享";
-  } finally {
-    shareBusy.value = false;
-  }
-}
-
-async function leaveOrCloseLocationShare() {
-  if (!activeLocationShare.value) {
-    return;
-  }
-
-  shareBusy.value = true;
-  try {
-    if (canCloseSession.value) {
-      await sessionStore.closeLocationShare(activeLocationShare.value.id);
-    } else {
-      await sessionStore.leaveLocationShare(activeLocationShare.value.id);
-    }
-    shareError.value = "";
-  } finally {
-    shareBusy.value = false;
-    if (heartbeatTimer) {
-      window.clearInterval(heartbeatTimer);
-      heartbeatTimer = null;
-    }
-  }
-}
-
-onMounted(() => {
-  if (sessionStore.source === "api") {
-    void refreshLocationShare().then(() => {
-      startHeartbeatLoop();
-    });
-  }
-  startRefreshLoop();
-});
-
-watch(isSharing, () => {
-  startHeartbeatLoop();
-});
-
-watch(
-  () => sessionStore.source,
-  () => {
-    startRefreshLoop();
-    if (sessionStore.source === "api") {
-      void refreshLocationShare();
-    }
-  },
-);
-
-onBeforeUnmount(() => {
-  if (refreshTimer) {
-    window.clearInterval(refreshTimer);
-  }
-  if (heartbeatTimer) {
-    window.clearInterval(heartbeatTimer);
-  }
-});
 </script>
 
 <template>
   <div class="space-y-4">
-    <MapBoard
-      :tombs="sessionStore.tombs"
-      :selected-tomb-id="selectedTombId"
-      :route-preview="sessionStore.routePreview"
-      :shared-participants="onlineParticipants"
-      :current-member-id="sessionStore.member.id"
-      :point-marker-preset="sessionStore.appSettings.pointMarkerPreset"
-      :point-marker-icon-url="sessionStore.appSettings.pointMarkerIconUrl"
-      @select="selectedTombId = $event"
-    />
-
-    <Card class="space-y-3">
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-sm font-semibold">实时位置共享</p>
-          <p class="text-xs text-muted-foreground">
-            {{ activeLocationShare ? activeLocationShare.title || "家族实时位置共享" : "当前还没有共享会话" }}
-          </p>
-        </div>
-        <Badge :variant="onlineParticipants.length ? 'success' : 'outline'">
-          {{ onlineParticipants.length }} 人在线
-        </Badge>
+    <div class="h5-animate-in flex items-center gap-3" style="--stagger-delay: 20ms;">
+      <div class="min-w-0 flex-1">
+        <p class="text-xl font-semibold text-foreground">墓点地图</p>
       </div>
-
-      <div class="flex gap-2">
-        <Button class="flex-1" @click="startOrJoinLocationShare">
-          {{ shareBusy ? "处理中..." : activeLocationShare ? (isSharing ? "重新同步位置" : "加入共享") : "开启共享" }}
-        </Button>
-        <Button variant="outline" class="flex-1" @click="refreshLocationShare">
-          <RefreshCw class="mr-1 size-4" />
-          刷新
-        </Button>
-      </div>
-
-      <Button
-        v-if="activeLocationShare && isSharing"
-        variant="secondary"
-        class="w-full"
-        @click="leaveOrCloseLocationShare"
-      >
-        {{ canCloseSession ? "结束共享会话" : "离开共享" }}
-      </Button>
-
-      <p v-if="shareError" class="text-sm text-destructive">{{ shareError }}</p>
-
-      <div v-if="onlineParticipants.length" class="space-y-2">
-        <div
-          v-for="participant in onlineParticipants"
-          :key="participant.id"
-          class="rounded-xl bg-muted/70 px-3 py-3"
+      <div class="relative w-[58%] max-w-[230px] shrink-0">
+        <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input v-model="keyword" class="h-10 pl-9 pr-10" placeholder="搜索墓点" />
+        <button
+          v-if="keyword"
+          class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+          type="button"
+          @click="clearKeyword"
         >
+          <X class="size-4" />
+        </button>
+      </div>
+    </div>
+
+    <Card
+      v-if="!sessionStore.isAuthenticated"
+      class="h5-card-lift h5-animate-in space-y-2 border-primary/20 bg-primary/5"
+      style="--stagger-delay: 45ms;"
+    >
+      <div class="flex items-center justify-between gap-3">
+        <p class="text-sm font-medium text-foreground">当前为只读浏览状态</p>
+        <LockKeyhole class="size-4 text-primary" />
+      </div>
+      <p class="text-xs leading-6 text-muted-foreground">可以查看地图和墓点详情，导航、打卡、留言、上传等操作需要登录后开启。</p>
+    </Card>
+
+    <div class="h5-animate-in" style="--stagger-delay: 70ms;">
+      <MapBoard
+        :tombs="filteredTombs"
+        :route-preview="activeRoutePreview"
+        :point-marker-preset="sessionStore.appSettings.pointMarkerPreset"
+        :point-marker-icon-url="sessionStore.appSettings.pointMarkerIconUrl"
+        @select="openTombDetail"
+      />
+    </div>
+
+    <Card
+      v-if="filteredTombs.length === 0"
+      class="h5-card-lift h5-animate-in space-y-3 text-center"
+      style="--stagger-delay: 160ms;"
+    >
+      <p class="text-base font-semibold text-foreground">没有匹配的墓点</p>
+      <p class="text-sm text-muted-foreground">可以换个关键词试试，或者清空筛选查看全部点位。</p>
+      <Button variant="outline" class="w-full" @click="clearKeyword">清空筛选</Button>
+    </Card>
+
+    <div v-else class="space-y-3">
+      <Card
+        v-for="(tomb, index) in filteredTombs"
+        :key="tomb.id"
+        class="h5-card-lift h5-animate-in cursor-pointer transition hover:border-primary/30 hover:shadow-sm"
+        :style="{ '--stagger-delay': `${180 + index * 35}ms` }"
+        @click="openTombDetail(tomb.id)"
+      >
+        <div class="space-y-3">
+          <TombCover :tomb="tomb" class="h-36" />
           <div class="flex items-center justify-between gap-4">
-            <p class="text-sm font-medium">
-              {{ participant.nicknameSnapshot }}{{ participant.memberId === sessionStore.member.id ? " · 我" : "" }}
-            </p>
-            <Badge variant="outline">{{ participant.isOnline ? "在线" : "离线" }}</Badge>
-          </div>
-          <p class="mt-2 text-xs text-muted-foreground">
-            {{ participant.lng.toFixed(5) }}, {{ participant.lat.toFixed(5) }} ·
-            {{ new Date(participant.lastActiveAt).toLocaleTimeString("zh-CN") }}
-          </p>
-        </div>
-      </div>
-    </Card>
-
-    <Card v-if="selectedTomb" class="space-y-3">
-      <TombCover :tomb="selectedTomb" class="h-40" />
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-sm font-semibold">{{ selectedTomb.name }}</p>
-          <p class="text-xs text-muted-foreground">
-            {{ selectedTomb.areaName || "未填写片区" }} · {{ selectedTomb.generation || "未录入辈分" }}
-          </p>
-        </div>
-        <Badge variant="outline">{{ sessionStore.source }}</Badge>
-      </div>
-      <Button class="w-full" @click="openNavigation(selectedTomb.lng, selectedTomb.lat, selectedTomb.name)">
-        导航到当前点位
-      </Button>
-    </Card>
-
-    <div class="space-y-3">
-      <Card v-for="tomb in sessionStore.tombs" :key="tomb.id" class="space-y-3">
-        <TombCover :tomb="tomb" class="h-36" />
-        <div class="flex items-start justify-between gap-4">
-          <div>
-            <div class="flex items-center gap-2">
-              <h3 class="font-semibold">{{ tomb.name }}</h3>
-              <Badge :variant="sessionStore.visitedTombIds.includes(tomb.id) ? 'success' : 'outline'">
-                {{ sessionStore.visitedTombIds.includes(tomb.id) ? "已拜" : "待祭扫" }}
-              </Badge>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <Badge :variant="sessionStore.visitedTombIds.includes(tomb.id) ? 'success' : 'outline'">
+                  {{ sessionStore.visitedTombIds.includes(tomb.id) ? "已祭扫" : "待祭扫" }}
+                </Badge>
+              </div>
+              <h3 class="mt-3 text-lg font-semibold text-foreground">{{ tomb.name }}</h3>
+              <p class="mt-2 text-sm text-muted-foreground">
+                {{ tomb.areaName || "未填写片区" }} · {{ tomb.branchName || "未录入支系" }}
+              </p>
+              <p class="mt-3 text-sm leading-6 text-muted-foreground">{{ tomb.description || "暂无点位说明。" }}</p>
             </div>
-            <p class="mt-1 text-sm text-muted-foreground">
-              {{ tomb.areaName || "未填写片区" }} · {{ tomb.branchName || "未录入支系" }}
-            </p>
+            <div class="shrink-0">
+              <Button
+                class="h-11 min-w-[108px] bg-[hsl(var(--primary))] shadow-[0_10px_24px_rgba(22,103,214,0.22)]"
+                :disabled="!sessionStore.isAuthenticated"
+                @click.stop="openNavigation(tomb.lng, tomb.lat, tomb.name)"
+              >
+                <Navigation2 class="mr-1 size-4" />
+                {{ sessionStore.isAuthenticated ? "一键导航" : "登录后导航" }}
+              </Button>
+            </div>
           </div>
-          <Navigation2 class="mt-1 size-4 text-primary" />
-        </div>
-        <p class="text-sm text-muted-foreground">{{ tomb.description || "暂无点位介绍。" }}</p>
-        <div class="flex gap-2">
-          <RouterLink :to="`/tombs/${tomb.id}`" class="flex-1">
-            <Button variant="outline" class="w-full">查看详情</Button>
-          </RouterLink>
-          <Button variant="secondary" class="flex-1" @click="openNavigation(tomb.lng, tomb.lat, tomb.name)">
-            一键导航
-          </Button>
         </div>
       </Card>
     </div>

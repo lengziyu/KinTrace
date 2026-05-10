@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTombDto } from './dto/create-tomb.dto';
 import { UpdateTombDto } from './dto/update-tomb.dto';
@@ -7,9 +11,19 @@ import { UpdateTombDto } from './dto/update-tomb.dto';
 export class TombService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(familyId?: string) {
+  findAll(familyId?: string | string[]) {
+    const where = Array.isArray(familyId)
+      ? {
+          familyId: {
+            in: familyId,
+          },
+        }
+      : familyId
+        ? { familyId }
+        : undefined;
+
     return this.prisma.tombPoint.findMany({
-      where: familyId ? { familyId } : undefined,
+      where,
       orderBy: {
         createdAt: 'desc',
       },
@@ -94,6 +108,17 @@ export class TombService {
 
     if (!tomb) {
       throw new NotFoundException('点位不存在');
+    }
+
+    const member = await this.prisma.familyMember.findUnique({
+      where: { id: payload.memberId },
+      select: {
+        familyId: true,
+      },
+    });
+
+    if (!member || member.familyId !== tomb.familyId) {
+      throw new BadRequestException('上传照片的成员与点位不属于同一家族');
     }
 
     return this.prisma.tombPhoto.create({

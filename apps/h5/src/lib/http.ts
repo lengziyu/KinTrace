@@ -1,4 +1,4 @@
-import type { ApiResponse } from "@kintrace/shared";
+import { STORAGE_KEYS, type ApiResponse } from "@kintrace/shared";
 
 const DEFAULT_API_BASE_URL = "http://localhost:3000/api/v1";
 
@@ -26,6 +26,17 @@ export function resolveAssetUrl(path?: string | null) {
   return new URL(path, `${getApiOrigin()}/`).toString();
 }
 
+function buildAuthHeaders(headers?: HeadersInit) {
+  const nextHeaders = new Headers(headers);
+  const token = localStorage.getItem(STORAGE_KEYS.h5Token);
+
+  if (token && !nextHeaders.has("Authorization")) {
+    nextHeaders.set("Authorization", `Bearer ${token}`);
+  }
+
+  return nextHeaders;
+}
+
 export class HttpError extends Error {
   status: number;
 
@@ -37,10 +48,10 @@ export class HttpError extends Error {
 
 export async function httpRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(joinUrl(getApiBaseUrl(), path), {
-    headers: {
+    headers: buildAuthHeaders({
       "Content-Type": "application/json",
       ...(init?.headers ?? {}),
-    },
+    }),
     ...init,
   });
 
@@ -63,6 +74,7 @@ export async function uploadImage(file: File) {
 
   const response = await fetch(joinUrl(getApiBaseUrl(), "uploads/images"), {
     method: "POST",
+    headers: buildAuthHeaders(),
     body: formData,
   });
 

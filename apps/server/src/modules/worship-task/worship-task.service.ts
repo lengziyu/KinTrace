@@ -7,9 +7,19 @@ import { UpdateWorshipTaskDto } from './dto/update-worship-task.dto';
 export class WorshipTaskService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(familyId?: string) {
+  findAll(familyId?: string | string[]) {
+    const where = Array.isArray(familyId)
+      ? {
+          familyId: {
+            in: familyId,
+          },
+        }
+      : familyId
+        ? { familyId }
+        : undefined;
+
     return this.prisma.worshipTask.findMany({
-      where: familyId ? { familyId } : undefined,
+      where,
       include: {
         _count: {
           select: {
@@ -18,6 +28,12 @@ export class WorshipTaskService {
         },
       },
       orderBy: [{ year: 'desc' }, { createdAt: 'desc' }],
+    });
+  }
+
+  findOne(id: string) {
+    return this.prisma.worshipTask.findUnique({
+      where: { id },
     });
   }
 

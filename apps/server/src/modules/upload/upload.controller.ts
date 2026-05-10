@@ -3,13 +3,15 @@ import {
   Controller,
   Post,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { mkdirSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { diskStorage, type Options } from 'multer';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 function ensureUploadDir() {
   const uploadDir = join(process.cwd(), 'uploads', 'images');
@@ -56,6 +58,8 @@ const uploadOptions: Options = {
 };
 
 @ApiTags('uploads')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('uploads')
 export class UploadController {
   @Post('images')

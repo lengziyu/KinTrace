@@ -1,9 +1,16 @@
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
 
 export class MemberQuickLoginDto {
   @IsString()
   @IsNotEmpty()
-  nickname!: string;
+  @Matches(/^1\d{10}$/, {
+    message: '请输入正确的 11 位手机号',
+  })
+  phone!: string;
+
+  @IsString()
+  @IsOptional()
+  nickname?: string;
 
   @IsString()
   @IsOptional()

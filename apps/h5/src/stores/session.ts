@@ -21,6 +21,7 @@ import {
 } from "@kintrace/shared";
 import { defineStore } from "pinia";
 import { httpRequest, uploadImage } from "@/lib/http";
+import { readFamilyEntryQuery } from "@/lib/family-entry";
 import {
   mockFamily,
   mockMember,
@@ -38,6 +39,13 @@ type LocationPayload = {
   accuracy?: number | null;
 };
 
+type FamilyEntrySource =
+  | "invite-link"
+  | "family-link"
+  | "direct-family"
+  | "cached-family"
+  | "default-family";
+
 const defaultAppSettings: AppSettings = {
   appNameZh: "宗迹",
   appNameEn: "KinTrace Admin",
@@ -46,6 +54,7 @@ const defaultAppSettings: AppSettings = {
   pointMarkerPreset: "star",
   pointMarkerIconUrl: "",
 };
+defaultAppSettings.appNameZh = "宗迹";
 
 function buildMockProgress(tombs: TombPoint[]) {
   const completed = 1;
@@ -85,8 +94,12 @@ function buildMockLocationShare(member: FamilyMember): LocationShareSession {
   return {
     id: "mock-location-session",
     familyId: mockFamily.id,
+    /*
     title: "清明同行共享",
+    title: "清明同行共享",
+    */
     status: LocationShareSessionStatus.ACTIVE,
+    title: "\u6e05\u660e\u540c\u884c\u5171\u4eab",
     startedByMemberId: member.id,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -141,6 +154,7 @@ export const useSessionStore = defineStore("h5-session", {
     source: "mock" as DataSource,
     loading: false,
     initialized: false,
+    isAuthenticated: Boolean(localStorage.getItem(STORAGE_KEYS.h5Token)),
     error: "",
     family: mockFamily as FamilyGroup,
     member: mockMember as FamilyMember,
@@ -154,10 +168,18 @@ export const useSessionStore = defineStore("h5-session", {
     routePreview: null as RoutePreview | null,
     tombDetails: {} as Record<string, TombDetail>,
     activeLocationShare: null as LocationShareSession | null,
+    entrySource: "default-family" as FamilyEntrySource,
+    entryHint: "当前为默认家族空间",
   }),
   getters: {
     activeTask(state) {
       return state.tasks[0] ?? null;
+    },
+    currentRoute(state) {
+      return state.routes.find((item) => item.isPrimary) ?? state.routes[0] ?? null;
+    },
+    isGuest(state) {
+      return !state.isAuthenticated;
     },
     isLocationSharingActive(state) {
       return state.activeLocationShare?.status === LocationShareSessionStatus.ACTIVE;
@@ -181,9 +203,18 @@ export const useSessionStore = defineStore("h5-session", {
 
     useMockData(message = "") {
       this.source = "mock";
+      this.isAuthenticated = Boolean(localStorage.getItem(STORAGE_KEYS.h5Token));
       this.error = message;
       this.family = mockFamily;
-      this.member = mockMember;
+      this.member = this.isAuthenticated
+        ? mockMember
+        : {
+            ...mockMember,
+            nickname: "访客",
+            phone: null,
+            avatar: null,
+            role: FamilyMemberRole.MEMBER,
+          };
       this.tombs = mockTombs;
       this.tasks = mockTasks;
       this.messages = mockMessages;
@@ -194,6 +225,35 @@ export const useSessionStore = defineStore("h5-session", {
       this.routePreview = null;
       this.tombDetails = {};
       this.activeLocationShare = null;
+      this.entrySource = "default-family";
+      this.entryHint = "当前展示示例家族空间";
+      this.entryHint = "当前展示的是示例家族空间";
+    },
+
+    setEntryMeta(source: FamilyEntrySource, familyName?: string) {
+      this.entrySource = source;
+
+      if (source === "invite-link") {
+        this.entryHint = familyName ? `已根据邀请链接进入 ${familyName}` : "已根据邀请链接进入当前家族";
+        return;
+      }
+
+      if (source === "family-link") {
+        this.entryHint = familyName ? `已根据家族链接进入 ${familyName}` : "已根据家族链接进入当前家族";
+        return;
+      }
+
+      if (source === "direct-family") {
+        this.entryHint = familyName ? `已根据家族 ID 进入 ${familyName}` : "已根据家族 ID 进入当前家族";
+        return;
+      }
+
+      if (source === "cached-family") {
+        this.entryHint = familyName ? `已恢复上次进入的 ${familyName}` : "已恢复上次进入的家族";
+        return;
+      }
+
+      this.entryHint = familyName ? `${familyName} 是当前默认家族空间` : "当前为默认家族空间";
     },
 
     async bootstrap() {
@@ -205,25 +265,92 @@ export const useSessionStore = defineStore("h5-session", {
       this.error = "";
 
       try {
+        const entryQuery = readFamilyEntryQuery();
         const cachedFamilyId = localStorage.getItem(STORAGE_KEYS.familyId);
         let familyId = cachedFamilyId;
+        let entrySource: FamilyEntrySource = cachedFamilyId ? "cached-family" : "default-family";
+
+        if (entryQuery.inviteCode || entryQuery.familyCode) {
+          const search = new URLSearchParams();
+          if (entryQuery.familyCode) {
+            search.set("familyCode", entryQuery.familyCode);
+          }
+          if (entryQuery.inviteCode) {
+            search.set("inviteCode", entryQuery.inviteCode);
+          }
+
+          const resolvedFamily = await httpRequest<FamilyGroup | null>(`families/resolve/access?${search.toString()}`);
+          if (resolvedFamily?.id) {
+            familyId = resolvedFamily.id;
+            localStorage.setItem(STORAGE_KEYS.familyId, resolvedFamily.id);
+            if (cachedFamilyId && cachedFamilyId !== resolvedFamily.id) {
+              localStorage.removeItem(STORAGE_KEYS.memberId);
+            }
+            entrySource = entryQuery.inviteCode ? "invite-link" : "family-link";
+          } else {
+            this.error = "未找到链接对应的家族，已尝试使用本地缓存或默认家族。";
+          }
+        } else if (entryQuery.familyId) {
+          familyId = entryQuery.familyId;
+          localStorage.setItem(STORAGE_KEYS.familyId, entryQuery.familyId);
+          if (cachedFamilyId && cachedFamilyId !== entryQuery.familyId) {
+            localStorage.removeItem(STORAGE_KEYS.memberId);
+          }
+          entrySource = "direct-family";
+        }
+
+        if (!familyId && (entryQuery.inviteCode || entryQuery.familyCode) && this.error) {
+          this.error = "\u672a\u627e\u5230\u94fe\u63a5\u5bf9\u5e94\u7684\u5bb6\u65cf\uff0c\u5df2\u5c1d\u8bd5\u4f7f\u7528\u672c\u5730\u7f13\u5b58\u6216\u9ed8\u8ba4\u5bb6\u65cf\u3002";
+          this.error = "未找到链接对应的家族，已尝试使用本地缓存或默认家族。";
+        }
 
         if (!familyId) {
           const families = await httpRequest<FamilyGroup[]>("families");
           familyId = families.find((item) => item.code === mockFamily.code)?.id ?? families[0]?.id;
+          entrySource = "default-family";
+        }
+
+        if (!familyId && (entryQuery.inviteCode || entryQuery.familyCode) && this.error) {
+          this.error = "\u672a\u627e\u5230\u94fe\u63a5\u5bf9\u5e94\u7684\u5bb6\u65cf\uff0c\u5df2\u5c1d\u8bd5\u4f7f\u7528\u672c\u5730\u7f13\u5b58\u6216\u9ed8\u8ba4\u5bb6\u65cf\u3002";
         }
 
         if (!familyId) {
+          throw new Error("\u6682\u672a\u67e5\u8be2\u5230\u5bb6\u65cf\u6570\u636e");
           throw new Error("暂未查询到家族数据");
         }
 
-        const [overview, tasks, messages, members, appSettings] = await Promise.all([
+        const hasMemberToken = Boolean(localStorage.getItem(STORAGE_KEYS.h5Token));
+        this.isAuthenticated = hasMemberToken;
+        const [overview, appSettings] = await Promise.all([
           httpRequest<FamilyOverview>(`families/${familyId}/overview`),
-          httpRequest<WorshipTask[]>(`worship-tasks?familyId=${familyId}`),
-          httpRequest<MemorialMessage[]>(`memorial-messages?familyId=${familyId}`),
-          httpRequest<FamilyMember[]>(`members?familyId=${familyId}`),
           httpRequest<AppSettings>("app-settings"),
         ]);
+
+        let tasks = overview.currentTask ? [overview.currentTask] : [];
+        let messages = overview.latestMessages;
+        let members: FamilyMember[] = [];
+
+        if (hasMemberToken) {
+          try {
+            [tasks, messages, members] = await Promise.all([
+              httpRequest<WorshipTask[]>(`worship-tasks?familyId=${familyId}`),
+              httpRequest<MemorialMessage[]>(`memorial-messages?familyId=${familyId}`),
+              httpRequest<FamilyMember[]>(`members?familyId=${familyId}`),
+            ]);
+          } catch (protectedError) {
+            localStorage.removeItem(STORAGE_KEYS.h5Token);
+            localStorage.removeItem(STORAGE_KEYS.memberId);
+            this.isAuthenticated = false;
+            this.error =
+              protectedError instanceof Error
+                ? protectedError.message
+                : "成员登录状态已失效，请重新进入家族。";
+          }
+          if (!localStorage.getItem(STORAGE_KEYS.h5Token)) {
+            this.isAuthenticated = false;
+            this.error = "\u6210\u5458\u767b\u5f55\u72b6\u6001\u5df2\u5931\u6548\uff0c\u8bf7\u91cd\u65b0\u8fdb\u5165\u5bb6\u65cf\u3002";
+          }
+        }
 
         this.applyOverview(overview, tasks, messages);
         this.appSettings = {
@@ -231,27 +358,57 @@ export const useSessionStore = defineStore("h5-session", {
           ...appSettings,
         };
         this.source = "api";
+        this.setEntryMeta(entrySource, overview.family.name);
+        this.isAuthenticated = hasMemberToken && members.length > 0;
 
-        const cachedMemberId = localStorage.getItem(STORAGE_KEYS.memberId);
-        this.member = members.find((item) => item.id === cachedMemberId) ?? members[0] ?? this.member;
+        if (members.length > 0) {
+          const cachedMemberId = localStorage.getItem(STORAGE_KEYS.memberId);
+          this.member = members.find((item) => item.id === cachedMemberId) ?? members[0] ?? this.member;
 
-        if (this.member?.id) {
-          localStorage.setItem(STORAGE_KEYS.memberId, this.member.id);
+          if (this.member?.id) {
+            localStorage.setItem(STORAGE_KEYS.memberId, this.member.id);
+          }
+        } else {
+          this.member = {
+            ...mockMember,
+            familyId: overview.family.id,
+            nickname: "访客",
+            phone: null,
+            avatar: null,
+            role: FamilyMemberRole.MEMBER,
+          };
         }
 
-        if (this.activeTask) {
+        if (members.length > 0 && this.activeTask) {
           this.taskProgress = await httpRequest<TaskProgress>(`worship-tasks/${this.activeTask.id}/progress`);
           this.visitedTombIds = this.taskProgress.items.filter((item) => item.visited).map((item) => item.tomb.id);
+        } else {
+          this.taskProgress = null;
+          this.visitedTombIds = [];
         }
       } catch (error) {
+        if (error instanceof Error) {
+          this.useMockData(error.message);
+          return;
+        }
+
+        this.useMockData("\u63a5\u53e3\u6682\u4e0d\u53ef\u7528\uff0c\u5df2\u56de\u9000\u5230\u793a\u4f8b\u6570\u636e");
+        return;
+        /*
         this.useMockData(error instanceof Error ? error.message : "接口暂不可用，已回退到示例数据");
+        */
       } finally {
         this.loading = false;
         this.initialized = true;
       }
     },
 
-    async quickLogin(nickname: string, inviteCode?: string, familyCode?: string) {
+    async quickLogin(payload: {
+      phone: string;
+      nickname?: string;
+      inviteCode?: string;
+      familyCode?: string;
+    }) {
       const result = await httpRequest<{
         accessToken: string;
         family: FamilyGroup;
@@ -259,19 +416,57 @@ export const useSessionStore = defineStore("h5-session", {
       }>("auth/member/quick-login", {
         method: "POST",
         body: JSON.stringify({
-          nickname,
-          inviteCode,
-          familyCode,
+          phone: payload.phone,
+          nickname: payload.nickname?.trim() || undefined,
+          inviteCode: payload.inviteCode,
+          familyCode: payload.familyCode,
         }),
       });
 
       localStorage.setItem(STORAGE_KEYS.h5Token, result.accessToken);
       localStorage.setItem(STORAGE_KEYS.familyId, result.family.id);
       localStorage.setItem(STORAGE_KEYS.memberId, result.member.id);
+      this.isAuthenticated = true;
       this.family = result.family;
       this.member = result.member;
 
       await this.bootstrap();
+    },
+
+    async updateMyProfile(payload: { nickname?: string; avatar?: string }) {
+      const member = await httpRequest<FamilyMember>("members/me", {
+        method: "PATCH",
+        body: JSON.stringify({
+          nickname: payload.nickname?.trim() || undefined,
+          avatar: payload.avatar?.trim() || undefined,
+        }),
+      });
+
+      this.member = member;
+      localStorage.setItem(STORAGE_KEYS.memberId, member.id);
+      return member;
+    },
+
+    async updateUpcomingWorshipDate(dateValue: string | null) {
+      const upcomingWorshipAt = dateValue ? `${dateValue}T08:30:00+08:00` : null;
+
+      if (this.source !== "api") {
+        this.family = {
+          ...this.family,
+          upcomingWorshipAt,
+        };
+        return this.family;
+      }
+
+      const family = await httpRequest<FamilyGroup>(`families/${this.family.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          upcomingWorshipAt,
+        }),
+      });
+
+      this.family = family;
+      return family;
     },
 
     async fetchTombDetail(tombId: string, force = false) {
@@ -279,17 +474,35 @@ export const useSessionStore = defineStore("h5-session", {
         return this.tombDetails[tombId];
       }
 
-      if (this.source !== "api") {
-        const mockDetail = buildMockDetail(tombId, this.tombs, this.messages);
-        if (mockDetail) {
-          this.tombDetails[tombId] = mockDetail;
+      const fallbackDetail = buildMockDetail(tombId, this.tombs, this.messages);
+
+      if (this.source !== "api" || !this.isAuthenticated) {
+        if (fallbackDetail) {
+          this.tombDetails[tombId] = fallbackDetail;
         }
-        return mockDetail;
+        return fallbackDetail;
       }
 
       const detail = await httpRequest<TombDetail>(`tombs/${tombId}`);
       this.tombDetails[tombId] = detail;
       return detail;
+    },
+
+    async logout() {
+      localStorage.removeItem(STORAGE_KEYS.h5Token);
+      localStorage.removeItem(STORAGE_KEYS.memberId);
+      this.isAuthenticated = false;
+      this.activeLocationShare = null;
+      this.taskProgress = null;
+      this.visitedTombIds = [];
+      this.member = {
+        ...mockMember,
+        nickname: "访客",
+        phone: null,
+        avatar: null,
+        role: FamilyMemberRole.MEMBER,
+      };
+      await this.bootstrap();
     },
 
     checkVisitDistance(tombId: string, position: LocationPayload) {
@@ -542,6 +755,68 @@ export const useSessionStore = defineStore("h5-session", {
       });
 
       return this.routePreview;
+    },
+
+    async savePrimaryRoutePlan(payload: {
+      name: string;
+      description?: string | null;
+      tombIds: string[];
+      morningTombCount: number;
+      afternoonTombCount: number;
+    }) {
+      const normalizedPayload = {
+        familyId: this.family.id,
+        name: payload.name.trim(),
+        description: payload.description?.trim() || null,
+        tombIds: payload.tombIds,
+        morningTombCount: payload.morningTombCount,
+        afternoonTombCount: payload.afternoonTombCount,
+        isPrimary: true,
+        createdByMemberId: this.member.id,
+      };
+
+      if (this.source !== "api") {
+        const existing = this.routes.find((item) => item.isPrimary) ?? this.routes[0] ?? null;
+        const planRevision = existing
+          ? existing.planRevision + (JSON.stringify(existing.tombIds) !== JSON.stringify(payload.tombIds) ||
+              existing.morningTombCount !== payload.morningTombCount ||
+              existing.afternoonTombCount !== payload.afternoonTombCount
+              ? 1
+              : 0)
+          : 1;
+        const nextRoute = {
+          id: existing?.id ?? `route-${Date.now()}`,
+          familyId: this.family.id,
+          name: normalizedPayload.name,
+          description: normalizedPayload.description,
+          tombIds: [...payload.tombIds],
+          isPrimary: true,
+          morningTombCount: payload.morningTombCount,
+          afternoonTombCount: payload.afternoonTombCount,
+          planRevision,
+          planUpdatedAt: new Date().toISOString(),
+          createdByMemberId: this.member.id,
+          createdAt: existing?.createdAt ?? new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        this.routes = [nextRoute, ...this.routes.filter((item) => item.id !== nextRoute.id).map((item) => ({ ...item, isPrimary: false }))];
+        return nextRoute;
+      }
+
+      const existing = this.routes.find((item) => item.isPrimary) ?? null;
+      const route = existing
+        ? await httpRequest<RoutePlan>(`route-plans/${existing.id}`, {
+            method: "PATCH",
+            body: JSON.stringify(normalizedPayload),
+          })
+        : await httpRequest<RoutePlan>("route-plans", {
+            method: "POST",
+            body: JSON.stringify(normalizedPayload),
+          });
+
+      const routes = await httpRequest<RoutePlan[]>(`route-plans?familyId=${this.family.id}`);
+      this.routes = routes;
+      return route;
     },
 
     async fetchActiveLocationShare() {

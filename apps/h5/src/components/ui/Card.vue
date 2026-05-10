@@ -10,7 +10,7 @@ defineProps<{
   <section
     :class="
       cn(
-        'h5-surface rounded-xl border p-4',
+        'h5-surface rounded-[var(--radius)] border p-4',
         $props.class,
       )
     "

@@ -1,284 +1,269 @@
-import "dotenv/config";
-import { hash } from "bcryptjs";
+import 'dotenv/config';
+import { hash } from 'bcryptjs';
 import {
   FamilyMemberRole,
-  MessageStatus,
   PrismaClient,
-  RecordActionType,
   TaskStatus,
   UserRole,
-} from "@prisma/client";
+} from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-async function main() {
-  const adminPassword = await hash("KinTrace123", 10);
+async function clearCurrentData() {
+  await prisma.locationShareParticipant.deleteMany();
+  await prisma.locationShareSession.deleteMany();
+  await prisma.tombPhoto.deleteMany();
+  await prisma.memorialMessage.deleteMany();
+  await prisma.worshipRecord.deleteMany();
+  await prisma.routePlan.deleteMany();
+  await prisma.worshipTask.deleteMany();
+  await prisma.tombPoint.deleteMany();
+  await prisma.familyMember.deleteMany();
+  await prisma.familyGroup.deleteMany();
+  await prisma.user.deleteMany();
+}
 
-  const admin = await prisma.user.upsert({
-    where: {
-      username: "admin",
-    },
-    update: {},
-    create: {
-      username: "admin",
-      passwordHash: adminPassword,
-      displayName: "宗迹管理员",
+async function main() {
+  await clearCurrentData();
+
+  const passwordHash = await hash('KinTrace123', 10);
+
+  const superAdmin = await prisma.user.create({
+    data: {
+      username: 'superadmin',
+      passwordHash,
+      displayName: 'KinTrace 超级管理员',
       role: UserRole.super_admin,
     },
   });
 
-  const linFamily = await prisma.familyGroup.upsert({
-    where: {
-      code: "lin-family",
-    },
-    update: {
-      ownerUserId: admin.id,
-      upcomingWorshipAt: new Date("2026-04-15T08:30:00+08:00"),
-      visitRangeMeters: 300,
-    },
-    create: {
-      name: "林氏宗亲",
-      code: "lin-family",
-      description: "用于演示家族祭扫协作流程的示例家族。",
-      inviteCode: "KINTRACE-LIN",
-      ownerUserId: admin.id,
-      upcomingWorshipAt: new Date("2026-04-15T08:30:00+08:00"),
+  const chenFamily = await prisma.familyGroup.create({
+    data: {
+      name: '陈氏宗亲',
+      code: 'chenshi',
+      description: '陈氏家族祭扫协作空间，用于测试路线、地图和邀请流程。',
+      inviteCode: 'chenshi_237',
+      ownerUserId: null,
+      upcomingWorshipAt: new Date('2026-04-18T08:30:00+08:00'),
       visitRangeMeters: 300,
     },
   });
 
-  const chenFamily = await prisma.familyGroup.upsert({
-    where: {
-      code: "chen-family",
-    },
-    update: {
-      ownerUserId: admin.id,
-      upcomingWorshipAt: new Date("2026-04-18T17:30:00+08:00"),
-      visitRangeMeters: 300,
-    },
-    create: {
-      name: "陈氏家族",
-      code: "chen-family",
-      description: "用于演示超管多家族切换的第二个家族空间。",
-      inviteCode: "KINTRACE-CHEN",
-      ownerUserId: admin.id,
-      upcomingWorshipAt: new Date("2026-04-18T17:30:00+08:00"),
+  const linFamily = await prisma.familyGroup.create({
+    data: {
+      name: '林氏宗亲',
+      code: 'linshi',
+      description: '林氏家族祭扫协作空间，用于测试成员、位置共享和家族切换。',
+      inviteCode: 'linshi_321',
+      ownerUserId: null,
+      upcomingWorshipAt: new Date('2026-04-20T08:30:00+08:00'),
       visitRangeMeters: 300,
     },
   });
 
-  const linAdmin = await prisma.familyMember.upsert({
-    where: {
-      familyId_nickname: {
-        familyId: linFamily.id,
-        nickname: "林长安",
-      },
-    },
-    update: {},
-    create: {
-      familyId: linFamily.id,
-      nickname: "林长安",
+  const chenMemberAdmin = await prisma.familyMember.create({
+    data: {
+      id: 'seed-member-chen-admin',
+      familyId: chenFamily.id,
+      nickname: '陈家管理员',
+      phone: '13800001001',
       role: FamilyMemberRole.admin,
-      joinSource: "seed",
+      joinSource: 'seed',
     },
   });
 
-  const linMember = await prisma.familyMember.upsert({
-    where: {
-      familyId_nickname: {
-        familyId: linFamily.id,
-        nickname: "林秋澄",
-      },
-    },
-    update: {},
-    create: {
-      familyId: linFamily.id,
-      nickname: "林秋澄",
+  await prisma.familyMember.create({
+    data: {
+      id: 'seed-member-chen-member',
+      familyId: chenFamily.id,
+      nickname: '陈家成员',
+      phone: '13800001002',
       role: FamilyMemberRole.member,
-      joinSource: "seed",
+      joinSource: 'seed',
     },
   });
 
-  const chenAdmin = await prisma.familyMember.upsert({
-    where: {
-      familyId_nickname: {
-        familyId: chenFamily.id,
-        nickname: "陈敬和",
-      },
-    },
-    update: {},
-    create: {
-      familyId: chenFamily.id,
-      nickname: "陈敬和",
+  const linMemberAdmin = await prisma.familyMember.create({
+    data: {
+      id: 'seed-member-lin-admin',
+      familyId: linFamily.id,
+      nickname: '林家管理员',
+      phone: '13800002001',
       role: FamilyMemberRole.admin,
-      joinSource: "seed",
+      joinSource: 'seed',
     },
   });
 
-  const linPointA = await prisma.tombPoint.upsert({
-    where: {
-      id: "seed-tomb-ancestor-a",
-    },
-    update: {},
-    create: {
-      id: "seed-tomb-ancestor-a",
+  await prisma.familyMember.create({
+    data: {
+      id: 'seed-member-lin-member',
       familyId: linFamily.id,
-      name: "始祖林公纪念点",
-      titleName: "始祖",
-      generation: "一世",
-      branchName: "宗脉主支",
-      lng: 121.4737,
-      lat: 31.2304,
-      areaName: "松泽纪念园",
-      description: "始祖核心祭扫点位，适合作为地图首页重点展示示例。",
-      coverImage: "/uploads/seed/tomb-a.jpg",
+      nickname: '林家成员',
+      phone: '13800002002',
+      role: FamilyMemberRole.member,
+      joinSource: 'seed',
     },
   });
 
-  const linPointB = await prisma.tombPoint.upsert({
-    where: {
-      id: "seed-tomb-ancestor-b",
-    },
-    update: {},
-    create: {
-      id: "seed-tomb-ancestor-b",
-      familyId: linFamily.id,
-      name: "二房先人纪念点",
-      titleName: "二房先人",
-      generation: "三世",
-      branchName: "东房",
-      lng: 121.4837,
-      lat: 31.2204,
-      areaName: "东岭纪念区",
-      description: "用于演示多点路线规划。",
-      coverImage: "/uploads/seed/tomb-b.jpg",
-    },
-  });
-
-  const chenPoint = await prisma.tombPoint.upsert({
-    where: {
-      id: "seed-tomb-chen-main",
-    },
-    update: {},
-    create: {
-      id: "seed-tomb-chen-main",
+  const chenPointA = await prisma.tombPoint.create({
+    data: {
+      id: 'seed-tomb-chen-main',
       familyId: chenFamily.id,
-      name: "陈氏先贤纪念点",
-      titleName: "先贤",
-      generation: "二世",
-      branchName: "南支",
+      name: '陈氏祖墓',
+      titleName: '始祖',
+      generation: '一世',
+      branchName: '主支',
       lng: 120.1652,
       lat: 30.2741,
-      areaName: "南麓纪念区",
-      description: "用于演示超管切换家族后的点位数据。",
+      areaName: '南陵纪念区',
+      description: '陈氏家族主祭扫点位。',
       coverImage: null,
     },
   });
 
-  const task = await prisma.worshipTask.upsert({
-    where: {
-      familyId_year: {
-        familyId: linFamily.id,
-        year: 2026,
-      },
+  const chenPointB = await prisma.tombPoint.create({
+    data: {
+      id: 'seed-tomb-chen-east',
+      familyId: chenFamily.id,
+      name: '东房祖墓',
+      titleName: '东房先人',
+      generation: '三世',
+      branchName: '东房',
+      lng: 120.172,
+      lat: 30.2681,
+      areaName: '东坡纪念区',
+      description: '用于测试路线排序和上午安排。',
+      coverImage: null,
     },
-    update: {},
-    create: {
+  });
+
+  const chenPointC = await prisma.tombPoint.create({
+    data: {
+      id: 'seed-tomb-chen-west',
+      familyId: chenFamily.id,
+      name: '西房纪念墓',
+      titleName: '西房支系',
+      generation: '五世',
+      branchName: '西房',
+      lng: 120.1586,
+      lat: 30.2805,
+      areaName: '西岭纪念区',
+      description: '用于测试下午扫墓安排。',
+      coverImage: null,
+    },
+  });
+
+  const linPointA = await prisma.tombPoint.create({
+    data: {
+      id: 'seed-tomb-lin-main',
       familyId: linFamily.id,
+      name: '林氏祖墓',
+      titleName: '始祖',
+      generation: '一世',
+      branchName: '宗房主支',
+      lng: 121.4737,
+      lat: 31.2304,
+      areaName: '松泽纪念园',
+      description: '林氏家族主祭扫点位。',
+      coverImage: null,
+    },
+  });
+
+  const linPointB = await prisma.tombPoint.create({
+    data: {
+      id: 'seed-tomb-lin-north',
+      familyId: linFamily.id,
+      name: '北房纪念墓',
+      titleName: '北房先人',
+      generation: '四世',
+      branchName: '北房',
+      lng: 121.4812,
+      lat: 31.2216,
+      areaName: '北园纪念区',
+      description: '用于测试第二个家族的线路与导航。',
+      coverImage: null,
+    },
+  });
+
+  await prisma.worshipTask.create({
+    data: {
+      familyId: chenFamily.id,
       year: 2026,
-      name: "2026 清明祭扫",
-      startDate: new Date("2026-04-01"),
-      endDate: new Date("2026-04-20"),
+      name: '2026 清明祭扫',
+      startDate: new Date('2026-04-01'),
+      endDate: new Date('2026-04-20'),
       status: TaskStatus.active,
     },
   });
 
-  const route = await prisma.routePlan.upsert({
-    where: {
-      id: "seed-route-main",
-    },
-    update: {},
-    create: {
-      id: "seed-route-main",
+  await prisma.worshipTask.create({
+    data: {
       familyId: linFamily.id,
-      name: "清明主线",
-      description: "从始祖点位到二房点位的示例路线。",
+      year: 2026,
+      name: '2026 春祭安排',
+      startDate: new Date('2026-04-05'),
+      endDate: new Date('2026-04-25'),
+      status: TaskStatus.active,
+    },
+  });
+
+  await prisma.routePlan.create({
+    data: {
+      id: 'seed-route-chen-main',
+      familyId: chenFamily.id,
+      name: '陈氏清明主线路',
+      description: '上午先扫主支，下午依次走东房和西房。',
+      tombIds: [chenPointA.id, chenPointB.id, chenPointC.id],
+      createdByMemberId: chenMemberAdmin.id,
+    },
+  });
+
+  await prisma.$executeRaw`
+    UPDATE "RoutePlan"
+    SET
+      "isPrimary" = true,
+      "morningTombCount" = 1,
+      "afternoonTombCount" = 2,
+      "planRevision" = 2,
+      "planUpdatedAt" = ${new Date('2026-04-10T09:00:00+08:00')}
+    WHERE id = ${'seed-route-chen-main'}
+  `;
+
+  await prisma.routePlan.create({
+    data: {
+      id: 'seed-route-lin-main',
+      familyId: linFamily.id,
+      name: '林氏春祭主线路',
+      description: '上午扫祖墓，下午再去北房纪念墓。',
       tombIds: [linPointA.id, linPointB.id],
-      createdByMemberId: linAdmin.id,
+      createdByMemberId: linMemberAdmin.id,
     },
   });
 
-  await prisma.worshipRecord.upsert({
-    where: {
-      id: "seed-record-1",
-    },
-    update: {},
-    create: {
-      id: "seed-record-1",
-      taskId: task.id,
-      tombId: linPointA.id,
-      memberId: linAdmin.id,
-      actionType: RecordActionType.visited,
-      remark: "已完成清扫与献花",
-      checkInLng: 121.47375,
-      checkInLat: 31.23043,
-      checkInAccuracy: 15,
-      distanceMeters: 8,
-      worshipTime: new Date("2026-04-03T09:00:00+08:00"),
-    },
-  });
-
-  await prisma.memorialMessage.upsert({
-    where: {
-      id: "seed-message-1",
-    },
-    update: {},
-    create: {
-      id: "seed-message-1",
-      familyId: linFamily.id,
-      tombId: linPointA.id,
-      memberId: linMember.id,
-      content: "愿家人平安顺遂，子孙和睦。",
-      status: MessageStatus.approved,
-    },
-  });
-
-  await prisma.memorialMessage.upsert({
-    where: {
-      id: "seed-message-2",
-    },
-    update: {},
-    create: {
-      id: "seed-message-2",
-      familyId: linFamily.id,
-      tombId: linPointB.id,
-      memberId: linAdmin.id,
-      content: "清明时节，谨表追思。",
-      status: MessageStatus.pending,
-    },
-  });
-
-  await prisma.tombPhoto.upsert({
-    where: {
-      id: "seed-photo-1",
-    },
-    update: {},
-    create: {
-      id: "seed-photo-1",
-      tombId: linPointA.id,
-      memberId: linAdmin.id,
-      imageUrl: "/uploads/seed/tomb-a.jpg",
-      caption: "清明前整理后的现场照片",
-    },
-  });
+  await prisma.$executeRaw`
+    UPDATE "RoutePlan"
+    SET
+      "isPrimary" = true,
+      "morningTombCount" = 1,
+      "afternoonTombCount" = 1,
+      "planRevision" = 1,
+      "planUpdatedAt" = ${new Date('2026-04-08T09:30:00+08:00')}
+    WHERE id = ${'seed-route-lin-main'}
+  `;
 
   console.log({
-    adminUser: admin.username,
-    adminPassword: "KinTrace123",
-    families: [linFamily.code, chenFamily.code],
-    inviteCodes: [linFamily.inviteCode, chenFamily.inviteCode],
-    sampleRouteId: route.id,
-    samplePointId: chenPoint.id,
+    cleared: true,
+    backendAccounts: {
+      superAdmin: { username: 'superadmin', password: 'KinTrace123' },
+    },
+    h5AndAdminAccounts: {
+      chenAdmin: { phone: '13800001001', inviteCode: 'chenshi_237', canLoginAdmin: true },
+      chenMember: { phone: '13800001002', inviteCode: 'chenshi_237', canLoginAdmin: false },
+      linAdmin: { phone: '13800002001', inviteCode: 'linshi_321', canLoginAdmin: true },
+      linMember: { phone: '13800002002', inviteCode: 'linshi_321', canLoginAdmin: false },
+    },
+    families: [chenFamily.code, linFamily.code],
+    seededBy: superAdmin.username,
   });
 }
 

@@ -59,7 +59,7 @@ export class LocationShareService {
     };
   }
 
-  private async findSessionOrThrow(sessionId: string) {
+  async findSessionOrThrow(sessionId: string) {
     const session = await this.prisma.locationShareSession.findUnique({
       where: { id: sessionId },
       include: {
@@ -119,6 +119,10 @@ export class LocationShareService {
       throw new NotFoundException('未找到共享成员');
     }
 
+    if (member.familyId !== dto.familyId) {
+      throw new NotFoundException('共享成员与家族空间不匹配');
+    }
+
     const created = await this.prisma.locationShareSession.create({
       data: {
         familyId: dto.familyId,
@@ -159,6 +163,10 @@ export class LocationShareService {
 
     if (!member) {
       throw new NotFoundException('未找到共享成员');
+    }
+
+    if (member.familyId !== session.familyId) {
+      throw new NotFoundException('共享成员与会话家族不匹配');
     }
 
     const updated = await this.prisma.locationShareSession.update({

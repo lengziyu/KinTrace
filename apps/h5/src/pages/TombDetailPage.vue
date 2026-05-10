@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
+import { LockKeyhole } from "lucide-vue-next";
 import LocationPickerMap from "@/components/LocationPickerMap.vue";
 import TombCover from "@/components/TombCover.vue";
 import Badge from "@/components/ui/Badge.vue";
@@ -37,14 +38,15 @@ const visibleMessages = computed(() =>
 );
 const recentRecords = computed(() => (tombDetail.value?.records ?? []).slice(0, 5));
 const photos = computed(() => tombDetail.value?.photos ?? []);
-const isManager = computed(() => sessionStore.canManagePoint);
+const isManager = computed(() => sessionStore.canManagePoint && sessionStore.isAuthenticated);
+const isGuest = computed(() => sessionStore.isGuest);
 
 function memberLabel(memberId: string) {
   return memberId === sessionStore.member.id ? "我" : `成员 ${memberId.slice(-4)}`;
 }
 
 function openNavigation() {
-  if (!point.value) {
+  if (!point.value || isGuest.value) {
     return;
   }
 
@@ -96,7 +98,7 @@ async function loadDetail() {
 }
 
 async function handleVisitAction() {
-  if (!point.value) {
+  if (!point.value || isGuest.value) {
     return;
   }
 
@@ -125,7 +127,7 @@ async function handleVisitAction() {
 }
 
 async function confirmManagedVisit() {
-  if (!point.value || !pendingVisitPosition.value) {
+  if (!point.value || !pendingVisitPosition.value || isGuest.value) {
     return;
   }
 
@@ -140,7 +142,7 @@ async function confirmManagedVisit() {
 }
 
 async function submitMessage() {
-  if (!point.value || !messageContent.value.trim()) {
+  if (!point.value || !messageContent.value.trim() || isGuest.value) {
     return;
   }
 
@@ -154,7 +156,7 @@ async function submitMessage() {
 }
 
 async function useCurrentLocationForPoint() {
-  if (!point.value) {
+  if (!point.value || !isManager.value) {
     return;
   }
 
@@ -171,7 +173,7 @@ async function useCurrentLocationForPoint() {
 }
 
 async function savePointLocation() {
-  if (!point.value || !adminPickedLocation.value) {
+  if (!point.value || !adminPickedLocation.value || !isManager.value) {
     return;
   }
 
@@ -188,6 +190,10 @@ async function savePointLocation() {
 }
 
 function openUploadDialog() {
+  if (isGuest.value) {
+    return;
+  }
+
   fileInputRef.value?.click();
 }
 
@@ -195,7 +201,7 @@ async function handleFileChange(event: Event) {
   const target = event.target as HTMLInputElement;
   const file = target.files?.[0];
 
-  if (!file || !point.value) {
+  if (!file || !point.value || isGuest.value) {
     return;
   }
 
@@ -238,6 +244,17 @@ watch(
 
 <template>
   <div v-if="point" class="space-y-4">
+    <Card
+      v-if="isGuest"
+      class="h5-card-lift h5-animate-in space-y-2 border-primary/20 bg-primary/5"
+    >
+      <div class="flex items-center justify-between gap-3">
+        <p class="text-sm font-medium text-foreground">当前为未登录状态</p>
+        <LockKeyhole class="size-4 text-primary" />
+      </div>
+      <p class="text-xs leading-6 text-muted-foreground">你现在可以查看详情，但打卡、导航、上传图片和留言都需要登录后才能操作。</p>
+    </Card>
+
     <Card class="space-y-3">
       <div @click="previewImage = point.coverImage || ''">
         <TombCover :tomb="point" class="h-48" />
@@ -253,33 +270,37 @@ watch(
           </p>
         </div>
         <Badge :variant="sessionStore.visitedTombIds.includes(point.id) ? 'success' : 'warning'">
-          {{ sessionStore.visitedTombIds.includes(point.id) ? "已拜" : "待祭扫" }}
+          {{ sessionStore.visitedTombIds.includes(point.id) ? "已祭扫" : "待祭扫" }}
         </Badge>
       </div>
       <p class="text-sm leading-6 text-muted-foreground">{{ point.description || "暂无点位介绍。" }}</p>
       <div class="grid grid-cols-2 gap-3 text-sm">
-        <div class="rounded-xl bg-muted/70 p-3">
+        <div class="rounded-[var(--radius)] bg-muted/70 p-3">
           <p class="text-xs text-muted-foreground">片区</p>
           <p class="mt-1 font-medium">{{ point.areaName || "未填写" }}</p>
         </div>
-        <div class="rounded-xl bg-muted/70 p-3">
+        <div class="rounded-[var(--radius)] bg-muted/70 p-3">
           <p class="text-xs text-muted-foreground">坐标</p>
           <p class="mt-1 font-medium">{{ point.lng }}, {{ point.lat }}</p>
         </div>
       </div>
       <div class="flex gap-2">
-        <Button class="flex-1" @click="handleVisitAction">
+        <Button class="flex-1" :disabled="isGuest || visitChecking" @click="handleVisitAction">
           {{
             visitChecking
               ? "定位中..."
               : isManager
                 ? "校验当前位置"
-                : "获取当前位置并标记已拜"
+                : isGuest
+                  ? "登录后打卡"
+                  : "获取当前位置并标记已祭扫"
           }}
         </Button>
-        <Button variant="secondary" class="flex-1" @click="openNavigation">一键导航</Button>
+        <Button variant="secondary" class="flex-1" :disabled="isGuest" @click="openNavigation">
+          {{ isGuest ? "登录后导航" : "一键导航" }}
+        </Button>
       </div>
-      <div v-if="visitCheckResult" class="rounded-xl bg-muted/70 p-3 text-sm text-muted-foreground">
+      <div v-if="visitCheckResult" class="rounded-[var(--radius)] bg-muted/70 p-3 text-sm text-muted-foreground">
         当前位置距离点位 {{ visitCheckResult.distanceMeters }} 米，已在允许范围 {{ visitCheckResult.thresholdMeters }} 米内。
       </div>
       <Button
@@ -288,7 +309,7 @@ watch(
         :disabled="visitSubmitting"
         @click="confirmManagedVisit"
       >
-        {{ visitSubmitting ? "提交中..." : "确认标记已拜" }}
+        {{ visitSubmitting ? "提交中..." : "确认标记已祭扫" }}
       </Button>
     </Card>
 
@@ -298,11 +319,11 @@ watch(
         <Badge variant="outline">管理员</Badge>
       </div>
       <div class="grid grid-cols-2 gap-3 text-sm">
-        <div class="rounded-xl bg-muted/70 p-3">
+        <div class="rounded-[var(--radius)] bg-muted/70 p-3">
           <p class="text-xs text-muted-foreground">经度</p>
           <p class="mt-1 font-medium">{{ adminPickedLocation?.lng?.toFixed(6) }}</p>
         </div>
-        <div class="rounded-xl bg-muted/70 p-3">
+        <div class="rounded-[var(--radius)] bg-muted/70 p-3">
           <p class="text-xs text-muted-foreground">纬度</p>
           <p class="mt-1 font-medium">{{ adminPickedLocation?.lat?.toFixed(6) }}</p>
         </div>
@@ -325,7 +346,7 @@ watch(
         <h3 class="font-semibold">现场图片</h3>
         <Badge variant="outline">{{ photos.length }} 张</Badge>
       </div>
-      <Textarea v-model="photoCaption" placeholder="可选：补充这张图片的说明" />
+      <Textarea v-model="photoCaption" :disabled="isGuest" placeholder="可选：补充这张图片的说明" />
       <input
         ref="fileInputRef"
         class="hidden"
@@ -334,8 +355,8 @@ watch(
         capture="environment"
         @change="handleFileChange"
       />
-      <Button class="w-full" @click="openUploadDialog">
-        {{ photoUploading ? "上传中..." : "拍照或上传图片" }}
+      <Button class="w-full" :disabled="isGuest" @click="openUploadDialog">
+        {{ photoUploading ? "上传中..." : isGuest ? "登录后上传图片" : "拍照或上传图片" }}
       </Button>
 
       <div v-if="photos.length" class="grid grid-cols-3 gap-3">
@@ -343,7 +364,7 @@ watch(
           v-for="photo in photos"
           :key="photo.id"
           type="button"
-          class="overflow-hidden rounded-xl border border-border/70"
+          class="overflow-hidden rounded-[var(--radius)] border border-border/70"
           @click="previewImage = photo.imageUrl"
         >
           <img :src="photo.imageUrl" alt="" class="h-24 w-full object-cover" />
@@ -355,11 +376,11 @@ watch(
     <Card class="space-y-3">
       <div class="flex items-center justify-between">
         <h3 class="font-semibold">写祈福留言</h3>
-        <Badge variant="outline">{{ sessionStore.source }}</Badge>
+        <Badge variant="outline">{{ sessionStore.isAuthenticated ? "可提交" : "未登录" }}</Badge>
       </div>
-      <Textarea v-model="messageContent" placeholder="愿先人安息，愿家族平安和睦。" />
-      <Button class="w-full" @click="submitMessage">
-        {{ submitting ? "提交中..." : "提交留言" }}
+      <Textarea v-model="messageContent" :disabled="isGuest" placeholder="愿先人安息，愿家族平安和睦。" />
+      <Button class="w-full" :disabled="isGuest || submitting || !messageContent.trim()" @click="submitMessage">
+        {{ submitting ? "提交中..." : isGuest ? "登录后留言" : "提交留言" }}
       </Button>
     </Card>
 
@@ -374,7 +395,7 @@ watch(
         <div
           v-for="message in visibleMessages"
           :key="message.id"
-          class="rounded-xl bg-muted/70 px-3 py-3"
+          class="rounded-[var(--radius)] bg-muted/70 px-3 py-3"
         >
           <div class="flex items-center justify-between gap-4">
             <p class="text-sm font-medium">{{ memberLabel(message.memberId) }}</p>
@@ -397,7 +418,7 @@ watch(
         <div
           v-for="record in recentRecords"
           :key="record.id"
-          class="rounded-xl border border-border/70 px-3 py-3"
+          class="rounded-[var(--radius)] border border-border/70 px-3 py-3"
         >
           <div class="flex items-center justify-between gap-4">
             <p class="text-sm font-medium">{{ memberLabel(record.memberId) }}</p>
@@ -418,7 +439,7 @@ watch(
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4"
       @click="previewImage = ''"
     >
-      <img :src="previewImage" alt="" class="max-h-[80vh] max-w-full rounded-2xl object-contain" />
+      <img :src="previewImage" alt="" class="max-h-[80vh] max-w-full rounded-[var(--radius-lg)] object-contain" />
     </div>
   </div>
 </template>

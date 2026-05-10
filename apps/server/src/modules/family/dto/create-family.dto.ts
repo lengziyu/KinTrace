@@ -12,10 +12,12 @@ export class CreateFamilyDto {
   name!: string;
 
   @IsString()
-  code!: string;
+  @IsOptional()
+  code?: string;
 
   @IsString()
-  inviteCode!: string;
+  @IsOptional()
+  inviteCode?: string;
 
   @IsString()
   @IsOptional()

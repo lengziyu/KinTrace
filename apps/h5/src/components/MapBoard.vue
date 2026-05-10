@@ -73,9 +73,10 @@ function createParticipantMarkerContent(participant: LocationShareParticipant) {
   const isCurrentMember = participant.memberId === props.currentMemberId;
   const shell = isCurrentMember ? "#2563eb" : participant.isOnline ? "#0f766e" : "#4b5563";
   const badge = isCurrentMember ? "#93c5fd" : participant.isOnline ? "#99f6e4" : "#d1d5db";
-  const name = participant.nicknameSnapshot.length > 10
-    ? `${participant.nicknameSnapshot.slice(0, 10)}...`
-    : participant.nicknameSnapshot;
+  const name =
+    participant.nicknameSnapshot.length > 10
+      ? `${participant.nicknameSnapshot.slice(0, 10)}...`
+      : participant.nicknameSnapshot;
   const initial = participant.nicknameSnapshot.slice(0, 1);
 
   return `
@@ -212,7 +213,7 @@ onBeforeUnmount(() => {
         class="absolute inset-0 flex items-center justify-center bg-[linear-gradient(135deg,rgba(116,142,136,0.18),transparent),linear-gradient(180deg,rgba(150,128,101,0.18),transparent)]"
       >
         <div class="space-y-3 text-center">
-          <img :src="pointMarkerIcon" alt="" class="mx-auto h-12 w-12 rounded-2xl" />
+          <img :src="pointMarkerIcon" alt="" class="mx-auto h-12 w-12 rounded-[var(--radius)]" />
           <p class="text-sm font-medium">尚未配置高德地图 Key</p>
         </div>
       </div>
@@ -232,7 +233,11 @@ onBeforeUnmount(() => {
 
     <div class="flex items-center justify-between border-t border-border/60 px-4 py-3 text-sm text-muted-foreground">
       <span>
-        {{ selectedTomb ? `${selectedTomb.name} · ${selectedTomb.areaName || "未填写片区"}` : "优先查看点位分布、路线顺序与共享成员位置" }}
+        {{
+          selectedTomb
+            ? `${selectedTomb.name} · ${selectedTomb.areaName || "未填写片区"}`
+            : "优先查看点位分布、路线顺序与共享成员位置"
+        }}
       </span>
       <Route class="size-4" />
     </div>

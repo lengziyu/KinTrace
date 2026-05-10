@@ -5,13 +5,54 @@ import { PrismaService } from '../prisma/prisma.service';
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getSummary(familyId?: string) {
-    const familyWhere = familyId ? { familyId } : undefined;
+  private buildFamilyWhere(familyIds?: string[] | null) {
+    if (familyIds === null || familyIds === undefined) {
+      return undefined;
+    }
+
+    if (familyIds.length === 0) {
+      return {
+        familyId: {
+          in: ['__no_family__'],
+        },
+      };
+    }
+
+    return {
+      familyId: {
+        in: familyIds,
+      },
+    };
+  }
+
+  private buildFamilyGroupWhere(familyIds?: string[] | null) {
+    if (familyIds === null || familyIds === undefined) {
+      return undefined;
+    }
+
+    if (familyIds.length === 0) {
+      return {
+        id: {
+          in: ['__no_family__'],
+        },
+      };
+    }
+
+    return {
+      id: {
+        in: familyIds,
+      },
+    };
+  }
+
+  async getSummary(familyIds?: string[] | null) {
+    const familyWhere = this.buildFamilyWhere(familyIds);
+    const familyGroupWhere = this.buildFamilyGroupWhere(familyIds);
 
     const [families, members, tombs, tasks, pendingMessages, activeTasks] =
       await Promise.all([
         this.prisma.familyGroup.count({
-          where: familyId ? { id: familyId } : undefined,
+          where: familyGroupWhere,
         }),
         this.prisma.familyMember.count({
           where: familyWhere,
@@ -46,13 +87,15 @@ export class DashboardService {
     };
   }
 
-  async getAdminSnapshot(familyId?: string) {
-    const familyWhere = familyId ? { familyId } : undefined;
+  async getAdminSnapshot(familyIds?: string[] | null) {
+    const familyWhere = this.buildFamilyWhere(familyIds);
+    const familyGroupWhere = this.buildFamilyGroupWhere(familyIds);
 
     const [summary, families, members, tombs, tasks, messages, routes] =
       await Promise.all([
-        this.getSummary(familyId),
+        this.getSummary(familyIds),
         this.prisma.familyGroup.findMany({
+          where: familyGroupWhere,
           orderBy: [{ upcomingWorshipAt: 'asc' }, { createdAt: 'desc' }],
         }),
         this.prisma.familyMember.findMany({
