@@ -1,24 +1,15 @@
-import { IsOptional, IsString, MinLength } from 'class-validator';
+import { IsNotEmpty, IsString, Matches, MinLength } from 'class-validator';
 
 export class AdminLoginDto {
-  @IsOptional()
   @IsString()
-  username?: string;
+  @IsNotEmpty()
+  @Matches(/^1\d{10}$/, {
+    message: '请输入正确的 11 位手机号',
+  })
+  phone!: string;
 
-  @IsOptional()
   @IsString()
+  @IsNotEmpty()
   @MinLength(6)
-  password?: string;
-
-  @IsOptional()
-  @IsString()
-  phone?: string;
-
-  @IsOptional()
-  @IsString()
-  familyCode?: string;
-
-  @IsOptional()
-  @IsString()
-  inviteCode?: string;
+  password!: string;
 }

@@ -26,12 +26,16 @@ async function clearCurrentData() {
 async function main() {
   await clearCurrentData();
 
-  const passwordHash = await hash('KinTrace123', 10);
+  const superAdminPassword = 'KinTrace123';
+  const memberPassword = 'KinTrace123';
+  const superAdminPhone = '13800000000';
+  const superAdminPasswordHash = await hash(superAdminPassword, 10);
+  const memberPasswordHash = await hash(memberPassword, 10);
 
   const superAdmin = await prisma.user.create({
     data: {
-      username: 'superadmin',
-      passwordHash,
+      username: superAdminPhone,
+      passwordHash: superAdminPasswordHash,
       displayName: 'KinTrace 超级管理员',
       role: UserRole.super_admin,
     },
@@ -67,6 +71,7 @@ async function main() {
       familyId: chenFamily.id,
       nickname: '陈家管理员',
       phone: '13800001001',
+      passwordHash: memberPasswordHash,
       role: FamilyMemberRole.admin,
       joinSource: 'seed',
     },
@@ -78,6 +83,7 @@ async function main() {
       familyId: chenFamily.id,
       nickname: '陈家成员',
       phone: '13800001002',
+      passwordHash: memberPasswordHash,
       role: FamilyMemberRole.member,
       joinSource: 'seed',
     },
@@ -89,6 +95,7 @@ async function main() {
       familyId: linFamily.id,
       nickname: '林家管理员',
       phone: '13800002001',
+      passwordHash: memberPasswordHash,
       role: FamilyMemberRole.admin,
       joinSource: 'seed',
     },
@@ -100,6 +107,7 @@ async function main() {
       familyId: linFamily.id,
       nickname: '林家成员',
       phone: '13800002002',
+      passwordHash: memberPasswordHash,
       role: FamilyMemberRole.member,
       joinSource: 'seed',
     },
@@ -254,13 +262,13 @@ async function main() {
   console.log({
     cleared: true,
     backendAccounts: {
-      superAdmin: { username: 'superadmin', password: 'KinTrace123' },
+      superAdmin: { phone: superAdminPhone, password: superAdminPassword },
     },
     h5AndAdminAccounts: {
-      chenAdmin: { phone: '13800001001', inviteCode: 'chenshi_237', canLoginAdmin: true },
-      chenMember: { phone: '13800001002', inviteCode: 'chenshi_237', canLoginAdmin: false },
-      linAdmin: { phone: '13800002001', inviteCode: 'linshi_321', canLoginAdmin: true },
-      linMember: { phone: '13800002002', inviteCode: 'linshi_321', canLoginAdmin: false },
+      chenAdmin: { phone: '13800001001', password: memberPassword, canLoginAdmin: true },
+      chenMember: { phone: '13800001002', password: memberPassword, canLoginAdmin: false },
+      linAdmin: { phone: '13800002001', password: memberPassword, canLoginAdmin: true },
+      linMember: { phone: '13800002002', password: memberPassword, canLoginAdmin: false },
     },
     families: [chenFamily.code, linFamily.code],
     seededBy: superAdmin.username,

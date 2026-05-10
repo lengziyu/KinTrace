@@ -85,7 +85,8 @@ model FamilyMember {
   family                FamilyGroup               @relation(fields: [familyId], references: [id], onDelete: Cascade)
   nickname              String
   avatar                String?
-  phone                 String?
+  phone                 String?                   @unique
+  passwordHash          String?
   role                  FamilyMemberRole          @default(member)
   joinSource            String                    @default("invite")
   status                MemberStatus              @default(active)
@@ -99,7 +100,6 @@ model FamilyMember {
   createdAt             DateTime                  @default(now())
   updatedAt             DateTime                  @updatedAt
 
-  @@unique([familyId, phone])
 }
 
 model TombPoint {

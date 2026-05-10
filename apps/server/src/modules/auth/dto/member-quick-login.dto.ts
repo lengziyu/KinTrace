@@ -9,6 +9,10 @@ export class MemberQuickLoginDto {
   phone!: string;
 
   @IsString()
+  @IsNotEmpty()
+  password!: string;
+
+  @IsString()
   @IsOptional()
   nickname?: string;
 

@@ -405,6 +405,7 @@ export const useSessionStore = defineStore("h5-session", {
 
     async quickLogin(payload: {
       phone: string;
+      password: string;
       nickname?: string;
       inviteCode?: string;
       familyCode?: string;
@@ -417,6 +418,7 @@ export const useSessionStore = defineStore("h5-session", {
         method: "POST",
         body: JSON.stringify({
           phone: payload.phone,
+          password: payload.password,
           nickname: payload.nickname?.trim() || undefined,
           inviteCode: payload.inviteCode,
           familyCode: payload.familyCode,
