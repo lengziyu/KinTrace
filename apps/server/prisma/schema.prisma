@@ -47,6 +47,17 @@ enum LocationShareSessionStatus {
   closed
 }
 
+enum GenealogyGender {
+  male
+  female
+  unknown
+}
+
+enum GenealogyStatus {
+  living
+  deceased
+}
+
 model User {
   id           String        @id @default(cuid())
   username     String        @unique
@@ -75,6 +86,7 @@ model FamilyGroup {
   messages              MemorialMessage[]
   routePlans            RoutePlan[]
   locationShareSessions LocationShareSession[]
+  genealogyPeople       GenealogyPerson[]
   createdAt             DateTime                @default(now())
   updatedAt             DateTime                @updatedAt
 }
@@ -228,4 +240,26 @@ model LocationShareParticipant {
   updatedAt       DateTime             @updatedAt
 
   @@unique([sessionId, memberId])
+}
+
+model GenealogyPerson {
+  id              String            @id @default(cuid())
+  familyId        String
+  family          FamilyGroup       @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  name            String
+  gender          GenealogyGender   @default(unknown)
+  generationLevel Int               @default(1)
+  generationLabel String
+  branchName      String?
+  parentId        String?
+  parent          GenealogyPerson?  @relation("GenealogyLineage", fields: [parentId], references: [id], onDelete: SetNull)
+  children        GenealogyPerson[] @relation("GenealogyLineage")
+  spouseName      String?
+  status          GenealogyStatus   @default(living)
+  bio             String?
+  sortOrder       Int               @default(1)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([familyId, generationLevel, sortOrder])
 }

@@ -6,6 +6,7 @@ import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
 import Input from "@/components/ui/Input.vue";
 import { formatDate, formatDateTime } from "@/lib/format";
+import { resolveScheduleDisplayDate } from "@/lib/schedule";
 import { useSessionStore } from "@/stores/session";
 
 const sessionStore = useSessionStore();
@@ -25,6 +26,9 @@ const routeChangedNoticeVisible = computed(
   () => Boolean(currentRoute.value?.planRevision && currentRoute.value.planRevision > 1 && !sessionStore.canManagePoint),
 );
 const hasWorshipDate = computed(() => Boolean(worshipDate.value));
+const currentScheduleDate = computed(() =>
+  resolveScheduleDisplayDate(sessionStore.activeTask?.startDate, sessionStore.family.upcomingWorshipAt),
+);
 
 const selectedTombs = computed(() =>
   selectedIds.value
@@ -48,8 +52,8 @@ const scheduleDays = computed(() => {
 
   return [
     {
-      key: worshipDate.value || sessionStore.family.upcomingWorshipAt || "pending",
-      dateLabel: formatDate(sessionStore.family.upcomingWorshipAt || worshipDate.value) || "待设置日期",
+      key: worshipDate.value || currentScheduleDate.value || "pending",
+      dateLabel: formatDate(currentScheduleDate.value || worshipDate.value) || "待设置日期",
       dateTimeLabel: formatDateTime(sessionStore.family.upcomingWorshipAt) || "",
       sections: [
         {

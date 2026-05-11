@@ -12,6 +12,7 @@ const prisma = new PrismaClient();
 async function clearCurrentData() {
   await prisma.locationShareParticipant.deleteMany();
   await prisma.locationShareSession.deleteMany();
+  await prisma.genealogyPerson.deleteMany();
   await prisma.tombPhoto.deleteMany();
   await prisma.memorialMessage.deleteMany();
   await prisma.worshipRecord.deleteMany();
@@ -190,6 +191,84 @@ async function main() {
       areaName: '北园纪念区',
       description: '用于测试第二个家族的线路与导航。',
       coverImage: null,
+    },
+  });
+
+  const chenRoot = await prisma.genealogyPerson.create({
+    data: {
+      familyId: chenFamily.id,
+      name: '陈启源',
+      gender: 'male',
+      generationLevel: 1,
+      generationLabel: '一世',
+      branchName: '宗脉主支',
+      spouseName: '王氏',
+      status: 'deceased',
+      bio: '陈氏入谱始祖，用于展示 Topola 风格族谱树。',
+      sortOrder: 1,
+    },
+  });
+
+  const chenSecond = await prisma.genealogyPerson.create({
+    data: {
+      familyId: chenFamily.id,
+      name: '陈宗礼',
+      gender: 'male',
+      generationLevel: 2,
+      generationLabel: '二世',
+      branchName: '宗脉主支',
+      parentId: chenRoot.id,
+      spouseName: '周氏',
+      status: 'deceased',
+      bio: '承续主支香火，作为第二代人物示例。',
+      sortOrder: 1,
+    },
+  });
+
+  await prisma.genealogyPerson.create({
+    data: {
+      familyId: chenFamily.id,
+      name: '陈明远',
+      gender: 'male',
+      generationLevel: 3,
+      generationLabel: '三世',
+      branchName: '东房',
+      parentId: chenSecond.id,
+      spouseName: null,
+      status: 'living',
+      bio: '当前在谱人物示例。',
+      sortOrder: 1,
+    },
+  });
+
+  const linRoot = await prisma.genealogyPerson.create({
+    data: {
+      familyId: linFamily.id,
+      name: '林守正',
+      gender: 'male',
+      generationLevel: 1,
+      generationLabel: '一世',
+      branchName: '南支',
+      spouseName: '吴氏',
+      status: 'deceased',
+      bio: '林氏家族根节点示例。',
+      sortOrder: 1,
+    },
+  });
+
+  await prisma.genealogyPerson.create({
+    data: {
+      familyId: linFamily.id,
+      name: '林敬修',
+      gender: 'male',
+      generationLevel: 2,
+      generationLabel: '二世',
+      branchName: '南支',
+      parentId: linRoot.id,
+      spouseName: '赵氏',
+      status: 'living',
+      bio: '林氏第二代人物示例。',
+      sortOrder: 1,
     },
   });
 

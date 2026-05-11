@@ -6,6 +6,7 @@ import {
   CalendarDays,
   LockKeyhole,
   MapPinned,
+  Network,
   Route,
   TimerReset,
   UsersRound,
@@ -15,6 +16,7 @@ import Badge from "@/components/ui/Badge.vue";
 import Button from "@/components/ui/Button.vue";
 import Card from "@/components/ui/Card.vue";
 import { formatDate, formatDateRange } from "@/lib/format";
+import { resolveScheduleCountdownTarget, resolveScheduleDisplayDate } from "@/lib/schedule";
 import { useSessionStore } from "@/stores/session";
 
 const sessionStore = useSessionStore();
@@ -41,7 +43,9 @@ const activeShareCount = computed(
 const taskDateRange = computed(() =>
   formatDateRange(sessionStore.activeTask?.startDate, sessionStore.activeTask?.endDate),
 );
-const worshipDate = computed(() => formatDate(sessionStore.family.upcomingWorshipAt));
+const worshipDate = computed(() =>
+  formatDate(resolveScheduleDisplayDate(sessionStore.activeTask?.startDate, sessionStore.family.upcomingWorshipAt)),
+);
 const statusLabel = computed(() =>
   sessionStore.isAuthenticated ? sourceLabelMap[sessionStore.source] || sessionStore.source : "未登录只读",
 );
@@ -57,11 +61,16 @@ const routeChangedNoticeVisible = computed(
 );
 
 const countdown = computed(() => {
-  if (!sessionStore.family.upcomingWorshipAt) {
+  const targetValue = resolveScheduleCountdownTarget(
+    sessionStore.activeTask?.startDate,
+    sessionStore.family.upcomingWorshipAt,
+  );
+
+  if (!targetValue) {
     return null;
   }
 
-  const target = new Date(sessionStore.family.upcomingWorshipAt).getTime();
+  const target = new Date(targetValue).getTime();
   const diff = target - now.value;
 
   if (diff <= 0) {
@@ -100,7 +109,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="space-y-4">
     <Card
-      class="h5-card-lift h5-animate-in space-y-5 overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(37,132,255,0.12),transparent_34%),linear-gradient(180deg,hsl(var(--card)),hsl(var(--card)/0.92))]"
+      class="h5-card-lift h5-animate-in space-y-5 overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(37,132,255,0.18),transparent_36%),linear-gradient(135deg,rgba(37,132,255,0.08),transparent_44%),linear-gradient(180deg,hsl(var(--card)),hsl(var(--card)/0.92))]"
     >
       <div class="flex items-start justify-between gap-4">
         <div class="min-w-0">
@@ -114,19 +123,19 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="grid grid-cols-3 gap-3">
-        <div class="h5-surface-subtle rounded-[var(--radius)] border p-3">
+        <div class="h5-surface-subtle rounded-[var(--radius)] border bg-[linear-gradient(180deg,rgba(37,132,255,0.08),transparent)] p-3">
           <p class="text-xs text-muted-foreground">点位</p>
           <p class="mt-3 text-2xl font-semibold text-foreground">
             <AnimatedNumber :value="sessionStore.tombs.length" />
           </p>
         </div>
-        <div class="h5-surface-subtle rounded-[var(--radius)] border p-3">
+        <div class="h5-surface-subtle rounded-[var(--radius)] border bg-[linear-gradient(180deg,rgba(30,200,192,0.08),transparent)] p-3">
           <p class="text-xs text-muted-foreground">线路</p>
           <p class="mt-3 text-2xl font-semibold text-foreground">
             <AnimatedNumber :value="sessionStore.routes.length" />
           </p>
         </div>
-        <div class="h5-surface-subtle rounded-[var(--radius)] border p-3">
+        <div class="h5-surface-subtle rounded-[var(--radius)] border bg-[linear-gradient(180deg,rgba(129,140,248,0.08),transparent)] p-3">
           <p class="text-xs text-muted-foreground">共享</p>
           <p class="mt-3 text-2xl font-semibold text-foreground">
             <AnimatedNumber :value="activeShareCount" />
@@ -137,7 +146,7 @@ onBeforeUnmount(() => {
 
     <Card
       v-if="!sessionStore.isAuthenticated"
-      class="h5-card-lift h5-animate-in space-y-3 border-primary/20 bg-primary/5"
+      class="h5-card-lift h5-animate-in space-y-3 border-primary/20 bg-[linear-gradient(135deg,rgba(37,132,255,0.12),rgba(37,132,255,0.03))]"
       style="--stagger-delay: 45ms;"
     >
       <div class="flex items-center justify-between gap-3">
@@ -154,7 +163,7 @@ onBeforeUnmount(() => {
       </RouterLink>
     </Card>
 
-    <Card class="h5-card-lift h5-animate-in space-y-4" style="--stagger-delay: 80ms;">
+    <Card class="h5-card-lift h5-animate-in space-y-4 overflow-hidden" style="--stagger-delay: 80ms;">
       <div class="flex items-center justify-between">
         <div>
           <p class="text-sm font-semibold text-foreground">家族祭扫倒计时</p>
@@ -165,13 +174,13 @@ onBeforeUnmount(() => {
         <TimerReset class="size-5 text-sky-500" />
       </div>
       <div class="grid gap-3 md:grid-cols-[1.3fr_0.7fr]">
-        <div class="h5-surface-subtle rounded-[var(--radius)] border p-4">
+        <div class="h5-surface-subtle rounded-[var(--radius)] border bg-[linear-gradient(180deg,rgba(37,132,255,0.09),transparent)] p-4">
           <p class="text-xs text-muted-foreground">倒计时</p>
           <p class="mt-2 text-2xl font-semibold text-foreground">
             {{ countdown?.label || "待设置" }}
           </p>
         </div>
-        <div class="h5-surface-subtle rounded-[var(--radius)] border p-4">
+        <div class="h5-surface-subtle rounded-[var(--radius)] border bg-[linear-gradient(180deg,rgba(30,200,192,0.09),transparent)] p-4">
           <p class="text-xs text-muted-foreground">完成进度</p>
           <p class="mt-2 text-2xl font-semibold text-foreground">
             <AnimatedNumber :value="completionRate" suffix="%" />
@@ -223,7 +232,7 @@ onBeforeUnmount(() => {
     <div class="grid grid-cols-2 gap-3">
       <RouterLink to="/map">
         <Card class="h5-card-lift h5-animate-in space-y-3" style="--stagger-delay: 150ms;">
-          <div class="flex size-11 items-center justify-center rounded-[var(--radius)] bg-sky-500/10 text-sky-500">
+          <div class="flex size-11 items-center justify-center rounded-[var(--radius)] bg-[linear-gradient(135deg,rgba(37,132,255,0.2),rgba(30,200,192,0.08))] text-sky-500 shadow-[0_10px_24px_rgba(37,132,255,0.14)]">
             <MapPinned class="size-5" />
           </div>
           <p class="font-semibold text-foreground">墓点地图</p>
@@ -232,11 +241,20 @@ onBeforeUnmount(() => {
       </RouterLink>
       <RouterLink to="/routes">
         <Card class="h5-card-lift h5-animate-in space-y-3" style="--stagger-delay: 180ms;">
-          <div class="flex size-11 items-center justify-center rounded-[var(--radius)] bg-emerald-500/10 text-emerald-500">
+          <div class="flex size-11 items-center justify-center rounded-[var(--radius)] bg-[linear-gradient(135deg,rgba(16,185,129,0.2),rgba(30,200,192,0.08))] text-emerald-500 shadow-[0_10px_24px_rgba(16,185,129,0.14)]">
             <Route class="size-5" />
           </div>
           <p class="font-semibold text-foreground">线路规划</p>
           <p class="text-xs leading-6 text-muted-foreground">查看当前主线路、上下午安排和扫墓顺序。</p>
+        </Card>
+      </RouterLink>
+      <RouterLink to="/genealogy" class="col-span-2">
+        <Card class="h5-card-lift h5-animate-in space-y-3" style="--stagger-delay: 205ms;">
+          <div class="flex size-11 items-center justify-center rounded-[var(--radius)] bg-[linear-gradient(135deg,rgba(99,102,241,0.18),rgba(37,132,255,0.08))] text-violet-500 shadow-[0_10px_24px_rgba(99,102,241,0.14)]">
+            <Network class="size-5" />
+          </div>
+          <p class="font-semibold text-foreground">族谱树</p>
+          <p class="text-xs leading-6 text-muted-foreground">查看 Topola 风格家族谱图，按人物节点切换聚焦。</p>
         </Card>
       </RouterLink>
     </div>

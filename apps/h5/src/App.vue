@@ -83,16 +83,18 @@ onMounted(() => {
 <style>
 .page-enter-active,
 .page-leave-active {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.42s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .page-enter-from {
   opacity: 0;
-  transform: translateY(14px) scale(0.985);
+  transform: translateY(18px) scale(0.978);
+  filter: blur(10px);
 }
 
 .page-leave-to {
   opacity: 0;
-  transform: translateY(-10px) scale(0.985);
+  transform: translateY(-12px) scale(0.99);
+  filter: blur(8px);
 }
 </style>

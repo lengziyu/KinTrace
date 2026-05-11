@@ -1,6 +1,8 @@
 import type {
   FamilyGroup,
   FamilyMember,
+  GenealogyChartData,
+  GenealogyPerson,
   LocationShareSession,
   MemorialMessage,
   RoutePlan,
@@ -73,8 +75,16 @@ export interface AdminSnapshot {
   summary: DashboardSummary;
   families: FamilyGroup[];
   members: FamilyMember[];
+  genealogyPeople?: GenealogyPerson[];
   tombs: TombPoint[];
   tasks: WorshipTask[];
   messages: MemorialMessage[];
   routes: RoutePlan[];
+}
+
+export interface GenealogyTreeView {
+  familyId: string;
+  people: GenealogyPerson[];
+  chartData: GenealogyChartData;
+  startIndiId: string | null;
 }

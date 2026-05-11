@@ -63,6 +63,59 @@ export interface FamilyMember {
   updatedAt: string;
 }
 
+export type GenealogyGender = "male" | "female" | "unknown";
+
+export type GenealogyStatus = "living" | "deceased";
+
+export interface GenealogyPerson {
+  id: string;
+  familyId: string;
+  name: string;
+  gender: GenealogyGender;
+  generationLevel: number;
+  generationLabel: string;
+  branchName: string | null;
+  parentId: string | null;
+  spouseName: string | null;
+  status: GenealogyStatus;
+  bio: string | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GenealogyChartIndi {
+  id: string;
+  firstName?: string;
+  lastName?: string;
+  famc?: string;
+  fams?: string[];
+  sex?: "M" | "F" | "U";
+  birth?: {
+    date?: {
+      year?: number;
+    };
+  };
+  death?: {
+    date?: {
+      year?: number;
+    };
+  };
+  notes?: string[];
+}
+
+export interface GenealogyChartFam {
+  id: string;
+  children?: string[];
+  wife?: string;
+  husb?: string;
+}
+
+export interface GenealogyChartData {
+  indis: GenealogyChartIndi[];
+  fams: GenealogyChartFam[];
+}
+
 export interface TombPoint {
   id: string;
   familyId: string;

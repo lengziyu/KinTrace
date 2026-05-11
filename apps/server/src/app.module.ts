@@ -7,6 +7,7 @@ import { AppSettingsModule } from './modules/app-settings/app-settings.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { FamilyModule } from './modules/family/family.module';
+import { GenealogyModule } from './modules/genealogy/genealogy.module';
 import { LocationShareModule } from './modules/location-share/location-share.module';
 import { MemberModule } from './modules/member/member.module';
 import { MemorialMessageModule } from './modules/memorial-message/memorial-message.module';
@@ -31,6 +32,7 @@ import { WorshipTaskModule } from './modules/worship-task/worship-task.module';
     DashboardModule,
     AuthModule,
     FamilyModule,
+    GenealogyModule,
     LocationShareModule,
     MemberModule,
     UploadModule,
