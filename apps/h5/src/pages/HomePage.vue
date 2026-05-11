@@ -76,18 +76,16 @@ const countdown = computed(() => {
   if (diff <= 0) {
     return {
       finished: true,
-      label: "祭扫时间已到，请尽快出发",
+      label: "已开始",
     };
   }
 
-  const totalMinutes = Math.floor(diff / 1000 / 60);
-  const days = Math.floor(totalMinutes / (60 * 24));
-  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
-  const minutes = totalMinutes % 60;
+  const dayMs = 1000 * 60 * 60 * 24;
+  const days = Math.ceil(diff / dayMs);
 
   return {
     finished: false,
-    label: `${days} 天 ${hours} 小时 ${minutes} 分钟`,
+    label: `${days} 天`,
   };
 });
 
@@ -96,7 +94,7 @@ let timer: ReturnType<typeof window.setInterval> | null = null;
 onMounted(() => {
   timer = window.setInterval(() => {
     now.value = Date.now();
-  }, 1000);
+  }, 60 * 1000);
 });
 
 onBeforeUnmount(() => {
@@ -173,10 +171,10 @@ onBeforeUnmount(() => {
         </div>
         <TimerReset class="size-5 text-sky-500" />
       </div>
-      <div class="grid gap-3 md:grid-cols-[1.3fr_0.7fr]">
+      <div class="grid grid-cols-[1.25fr_0.95fr] gap-3">
         <div class="h5-surface-subtle rounded-[var(--radius)] border bg-[linear-gradient(180deg,rgba(37,132,255,0.09),transparent)] p-4">
           <p class="text-xs text-muted-foreground">倒计时</p>
-          <p class="mt-2 text-2xl font-semibold text-foreground">
+          <p class="mt-2 text-3xl font-semibold text-foreground">
             {{ countdown?.label || "待设置" }}
           </p>
         </div>
